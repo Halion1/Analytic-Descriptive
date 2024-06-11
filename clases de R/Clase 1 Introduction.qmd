@@ -1,0 +1,215 @@
+---
+format:
+  html:
+    self-contained: true
+---
+
+### Welcome to RStudio Cloud
+
+Start by taking a quick look at the "Sample_Script.R" file.
+
+The document that you are currently viewing is referred to as a Quarto document. These documents have a file extension of ".qmd". We are editing the Quarto document in RStudio's Visual Editor. The Visual Editor is a WYSIWYG editor. The underlying format of text that we are using in these documents is called "R Markdown". If you view the "Source" of the document, you can see the R Markdown code.
+
+We will use Quarto documents throughout the course. These documents allow you to combine free text (like this), code, and code output. When you done with your work in a Quarto document, it is customary to "knit" (render) the document into a Word, HTML, or PDF file.
+
+Note: The block at the very top of this document is called a "YAML header". It contains information pertaining to how the document will be formatted when it is rendered. Do not delete this header. The header will not show in your rendered document.
+
+Quick note: If the width of the Quarto document is too narrow, go Tools -\> Global Options -\> R Markdown -\> Visual and set the "Editor content width" to an appropriate value. A reasonable value to try would be 1000 pixels.
+
+#### RStudio Orientation
+
+Please save frequently! Click the floppy disk next to the ABC and check mark to save now.
+
+Let's start with a quick tour of the RStudio interface: Console, Markdown, Environment/History/Connections, Files/Plots/Packages/Help/View.
+
+#### Free Text
+
+This is some free text like in Word or Google Docs. This is an example of free text.
+
+#### R Code Chunks
+
+Here's an example of R code inside a "code chunk". To execute this code, click the green area at the right side of the gray background area.
+
+```{r}
+# demonstrating addition
+1 + 2 + 4 #this is a comment
+```
+
+Another chunk.
+
+```{r}
+x = 2
+y <- 3 #you may see some references that use <- instead of =
+z = x + y 
+```
+
+Function demonstration (mean).
+
+```{r}
+x = c(0, 10, 15) #the c function combines things
+mean(x) 
+```
+
+Here is the R code from the "Descriptive Statistics" lecture.
+
+```{r}
+# Create a small dataset
+x <- c(10, 15, 20, 25, 30, 35, 40, 45)
+
+mean(x)
+# Output: 27.5
+
+median(x)
+# Output: 27.5
+
+range(x)
+# Output: 10 45
+
+sd(x)
+# Output: 12.02082
+
+var(x)
+# Output: 144.1667
+```
+
+#### Working With R Packages
+
+```{r}
+#packages are installed first and then "library-ed". 
+
+#install.packages("tidyverse") #downloads and installs package, typically only need to do one time, comment out this line after running
+
+library(tidyverse) #activates the package so it can be used, must do each time you open your project
+#The tidyverse package is a package of packages. We will use tidyverse for every project that we do. 
+```
+
+#### Working with Data
+
+Datasets that we work with will come from a variety of sources:\
+\* Comma Separated Values (CSV) files\
+\* Web-based datasets\
+\* Datasets included in R packages
+
+The first dataset that we'll look at comes from the ggplot2 package. We load the dataset into an object referred to as a data frame. A data frame is a tabular structure for storing data. Note: The Tidyverse package uses a version of data frames referred to as a tibble.
+
+```{r}
+diamonds = ggplot2::diamonds
+```
+
+```{r}
+str(diamonds)
+summary(diamonds)
+```
+
+#### Filter, Select, and Mutate Functions
+
+Filter (selects rows that meet some criteria)
+
+```{r}
+diamonds %>% filter(price < 1000)
+```
+
+```{r}
+#notice how this code is different
+#what is the difference?
+cheap = diamonds %>% filter(price < 1000)
+
+summary(cheap)
+str(cheap)
+```
+
+Select (selects columns, typically by name)
+
+```{r}
+prices = diamonds %>% select(price)
+str(prices)
+```
+
+```{r}
+nd = diamonds %>% select(-depth) #all columns but depth
+str(nd)
+```
+
+```{r}
+diamonds2 = diamonds %>% select(c(price,carat,cut,color))
+str(diamonds2)
+```
+
+Mutate (creates new columns or modifies existing ones)
+
+```{r}
+diamonds = diamonds %>% mutate(pricepercarat = price/carat)
+str(diamonds)
+```
+
+Return to PowerPoint for visualization/ggplot2 lectures.
+
+#### Plotting and Chart Types
+
+Scatterplots are used to view the relationship between two quantitative variables.
+
+```{r}
+#pay attention to the pattern of this function
+ggplot(diamonds, aes(x = carat, y = price)) 
+#what does this function do?
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price)) + geom_point()
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price)) + geom_point() + theme_bw()
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price, color = cut)) + geom_point() + theme_bw()
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price)) + geom_point() + facet_wrap(~cut) + theme_bw()
+```
+
+```{r}
+ggplot(diamonds, aes(x = carat, y = price, color = color)) + geom_point() + facet_wrap(~cut) + theme_bw() 
+```
+
+Histograms are used to examine the distribution of a single quantitative variable.
+
+```{r}
+ggplot(diamonds,aes(x=price)) + geom_histogram() + theme_bw()
+```
+
+```{r}
+ggplot(diamonds,aes(x=price)) + geom_histogram(binwidth = 500) + theme_bw()
+```
+
+```{r}
+ggplot(diamonds,aes(x=price, color = cut)) + geom_histogram(binwidth = 500) + theme_bw()
+```
+
+```{r}
+ggplot(diamonds,aes(x=price, fill = cut)) + geom_histogram(binwidth = 500) + theme_bw()
+```
+
+```{r}
+ggplot(diamonds,aes(x=price)) + geom_histogram(binwidth = 500) + facet_wrap(~cut) + theme_bw()
+```
+
+Barplots are primarily used to show counts of data in categories. More challenging if you want to use barplot to display something this is NOT a count. We'll cover later.
+
+```{r}
+ggplot(diamonds, aes(x=cut)) + geom_bar() + theme_bw()
+```
+
+Boxplots are used to show the distribution of a quantitative variable across categories. In some situations, other plot types may be more appropriate.
+
+```{r}
+ggplot(diamonds, aes(x=cut, y=price)) + geom_boxplot() + theme_bw()
+```
+
+```{r}
+ggplot(diamonds, aes(x=cut, y=price, fill = color)) + geom_boxplot() + theme_bw()
+```
+
+#### 

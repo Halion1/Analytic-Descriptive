@@ -1,0 +1,143 @@
+## **Heart Data with Lasso**
+
+```{r}
+#| include: false
+library(tidyverse) 
+library(tidymodels)
+library(ROCR) #for ROC curve development (help with threshold selection)
+library(VIM) #for checking on missing data
+library(skimr)
+library(glmnet)
+```
+
+We will use a version of the Framingham Heart Study dataset. This study is a famous, longitudinal study of cardiovascular disease risk factors that first began in 1948. The response variable is "TenYearCHD" which is a binary variable that indicates whether or not a study participant developed coronary heart disease within a ten year period from the time that the risk factors were observed.
+
+```{r}
+heart = read_csv("framingham.csv")
+str(heart)
+skim(heart)
+```
+
+The following variables in the dataset are categorical and should be converted to factors: male, education, currentSmoker, BPMeds, prevalentStroke, prevalentHyp, diabetes, and TenYearCHD. Code to do this is given below. Use "str" to verify that these conversions were successful.
+
+```{r}
+#use a shortcut to select certain variables to convert to factors
+heart = heart %>% mutate_at(c("male","education","currentSmoker","BPMeds","prevalentStroke",
+                              "prevalentHyp","diabetes","TenYearCHD"),as_factor)
+str(heart)
+```
+
+Rename variable levels:
+
+```{r}
+heart = heart %>% mutate(male = fct_recode(male, "Yes"="1","No"="0")) %>%
+  mutate(currentSmoker = fct_recode(currentSmoker, "Yes"="1","No"="0")) %>%
+  mutate(BPMeds = fct_recode(BPMeds, "Yes"="1","No"="0")) %>%
+  mutate(prevalentStroke = fct_recode(prevalentStroke, "Yes"="1","No"="0")) %>%
+  mutate(prevalentHyp = fct_recode(prevalentHyp, "Yes"="1","No"="0")) %>%
+  mutate(diabetes = fct_recode(diabetes, "Yes"="1","No"="0")) %>%
+  mutate(TenYearCHD = fct_recode(TenYearCHD, "Yes"="1","No"="0")) %>%
+  mutate(education = fct_recode(education, "Some HS"="1", "HS"="2",
+                                "Some College"="3", "College or More"="4"))
+str(heart)
+```
+
+Addressing missingness
+
+```{r}
+heart = heart %>% select(-glucose) #deleting the glucose column
+heart = heart %>% drop_na() #deleting any row with missingness
+vim_plot = aggr(heart, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+Split the data
+
+```{r}
+set.seed(1234)
+heart_split = initial_split(heart, prop = 0.7, strata = TenYearCHD)
+train = training(heart_split)
+test = testing(heart_split)
+```
+
+### Models
+
+First let's set-up our k-folds that we'll use for tuning the lambda parameter.
+
+```{r}
+set.seed(5144)
+folds = vfold_cv(train, v=5) #using 5 folds, 3, 5, or 10 is typical
+```
+
+```{r}
+glmnet_model = 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet")  
+
+heart_recipe = recipe(TenYearCHD ~., data = train) %>%
+                step_dummy(all_nominal(), -all_outcomes()) %>%
+                step_normalize(all_predictors(), -all_nominal())
+
+glmnet_wf = workflow() %>%
+  add_recipe(heart_recipe) %>% 
+  add_model(glmnet_model)
+
+glmnet_grid = grid_regular(penalty(), levels = 100)
+
+#set up tuning of lambda
+glmnet_tune = 
+  tune_grid(glmnet_wf, resamples = folds, 
+            grid = glmnet_grid)
+```
+
+```{r}
+glmnet_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  ggplot(aes(penalty, mean)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(linewidth = 1.5) +
+  theme(legend.position = "none")
+```
+
+Select the best value of lambda for accuracy.
+
+```{r}
+best_acc = glmnet_tune %>%
+  select_best("accuracy")
+best_acc
+```
+
+```{r}
+final_lasso = glmnet_wf %>% finalize_workflow(best_acc)
+
+lasso_fit = fit(final_lasso, train)
+```
+
+Take a look at the model coefficients
+
+```{r}
+options(scipen = 999)
+lasso_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  %>% 
+  coef(s = best_acc$penalty) #show the coefficients for our selected lambda value
+options(scipen = 0)
+```
+
+Threshold development
+
+```{r}
+predictions = predict(lasso_fit, train, type="prob")[2]
+
+ROCRpred = prediction(predictions, train$TenYearCHD) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```

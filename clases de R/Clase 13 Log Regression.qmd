@@ -1,0 +1,153 @@
+## Intro to Logistic Regression
+
+Libraries
+
+```{r}
+#|include: false
+#install.packages(c("titanic","tidyverse","caret","mice","VIM","MASS"))
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(mice)
+library(VIM)
+```
+
+Load Titanic Data from the titanic package.
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+Structure and summary
+
+```{r}
+str(titanic)
+summary(titanic)
+```
+
+Remove a few variables that we do not plan to use in our models. Perform factor conversion because several of our variables are categorical and should be converted to factors.
+
+```{r}
+titanic = titanic %>% dplyr::select(-PassengerId, -Name, -Fare, -Cabin, -Ticket, -Embarked) 
+
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+str(titanic)
+```
+
+View missingness in the dataset.
+
+```{r}
+vim_plot = aggr(titanic, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+Impute the age variable. NOTE: Normally we would do this after the training and testing split. We'll discuss later.
+
+```{r}
+#impute age
+set.seed(12345)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE) #imputes age
+summary(imp_age)
+```
+
+Fill in the missing values with the imputed values.
+
+```{r}
+titanic_complete = complete(imp_age) 
+summary(titanic_complete)
+```
+
+Training/testing split. 70% of the data goes to the training set.
+
+```{r}
+set.seed(1234)
+titanic_split = initial_split(titanic, prop = 0.7, strata = Survived)
+train = training(titanic_split)
+test = testing(titanic_split)
+```
+
+### Visuals
+
+Recall that we do visualization and modeling on the training set (not on the full set or on the test set).
+
+Passenger Class
+
+```{r}
+ggplot(train, aes(x=Pclass, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+Alternative (look at tabular data)
+
+```{r}
+t1 = table(train$Survived, train$Pclass) #create a table object
+prop.table(t1, margin = 2 ) #crosstab with proportions
+```
+
+Gender
+
+```{r}
+ggplot(train, aes(x=Sex, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+Age
+
+```{r}
+ggplot(train, aes(x=Survived, y= Age)) + geom_boxplot() + geom_jitter() + theme_bw()
+```
+
+Siblings/Spouses
+
+```{r}
+ggplot(train, aes(x=SibSp, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+Alternative (look at tabular data)
+
+```{r}
+t2 = table(train$Survived, train$SibSp) #create a table object
+prop.table(t2, margin = 2 ) #crosstab with proportions
+```
+
+Parents/Children
+
+```{r}
+ggplot(train, aes(x=Parch, fill = Survived)) + geom_bar() + theme_bw()
+```
+
+Alternative (look at tabular data)
+
+```{r}
+t3 = table(train$Survived, train$Parch) #create a table object
+prop.table(t3, margin = 2 ) #crosstab with proportions
+```
+
+## Modeling
+
+Let's build a model with Pclass only. Note the format and the use of the glm function.
+
+```{r}
+logreg_model = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe = recipe(Survived ~ Pclass , data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(logreg_recipe) %>% 
+  add_model(logreg_model)
+
+logreg_fit = fit(logreg_wf,train)
+```
+
+Examine the model
+
+```{r}
+options(scipen = 999)
+tidy(logreg_fit)
+glance(logreg_fit)
+
+```
+
+Next we'll look at making predictions and evaluating model quality.

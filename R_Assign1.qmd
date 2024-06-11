@@ -1,0 +1,121 @@
+---
+format:
+  html:
+    embed-resources: true
+---
+
+## R and RStudio Assignment 1
+
+In this assignment you will complete a variety of basic R/RStudio tasks with an emphasis on Tidyverse content. This assignment is drawn primarily from basic topics covered in our lectures and the **R for Data Science** textbook (link to the textbook in the course syllabus).
+
+**Deliverable:** Each question in the assignment corresponds to a question in the Canvas quiz associated with this assignment.
+
+```{r}
+#| include: false
+library(tidyverse) #our standard package for working in R
+library(esquisse) #a visualization helper package (may not be needed)
+library(nycflights13) #contains a dataset that we will need
+```
+
+------------------------------------------------------------------------
+
+**Question 1**: The "nycflights13" package includes a dataset containing data on flights departing from three of New York City's airports (LaGuardia, JFK, and Newark). Use the line of code below to read in this dataset into a data frame called "diamonddata".
+
+```{r}
+flights = nycflights13::flights
+```
+
+Use an appropriate R command to answer the question: How many rows are in this dataset?
+
+```{r}
+nrow(flights)
+```
+
+
+**Question 2**: Use an appropriate R command to answer the question: How many columns are in the "flights" dataset?
+
+```{r}
+ncol(flights)
+```
+
+
+**Question 3**: Use the appropriate R function to select rows in the dataset with departure delays greater than 10 minutes (Hint: The variable that records departure delay is called "dep_delay").
+
+```{r}
+delay = flights %>% filter(dep_delay > 10)
+```
+
+
+How many flights in the dataset had a delay greater than 10 minutes?
+
+82834
+
+**Question 4**: Use the appropriate R function to select rows in the dataset with flights that departed from "JFK". (Hint: The variable that records departure airport is called "origin").
+
+```{r}
+kennedy = flights %>% filter(origin == "JFK")
+```
+
+How many flights in the dataset departed from JFK?
+111279
+
+**Question 5**: Create a new data frame with flights with "air_time" values greater than 180. Call this data frame "long".
+
+```{r}
+long <- flights %>% filter(air_time > 180)
+```
+
+How many rows are in this new data frame?
+
+89476
+
+**Question 6**: Using your new data frame from Question 5, determine the average "dep_delay" of flights in this data frame.
+
+```{r}
+mean(long$dep_delay)
+```
+
+Before proceeding, use the "read_csv" function to read-in the "InventoryData.csv" file into a data frame called "inventory". The CSV file is already uploaded to RStudio Cloud (you can see it in the Files pane at right).
+
+```{r}
+inventory <- read_csv("InventoryData.csv")
+summary(inventory)
+```
+
+
+In the "inventory" data frame that you have just created, what type of variable is "Supplier"?
+
+A. numeric\
+B. integer\
+C. factor\
+D. character ++++
+
+**Question 7** In the "inventory" data frame that you have just created, what is the standard deviation of the "On Hand" variable?
+
+```{r}
+sd(inventory$`On Hand`)
+```
+
+
+Hint: Be careful to write out On Hand inside backticks. A backtick is the character that looks like an apostrophe. It is typically on the same key as the \~ symbol. We have to do this because On Hand has a space in it (It's good practice to avoid spaces in variable names for this reason).
+
+**Question 8**: What does the code below do?
+
+```{r}
+inventory = inventory %>% mutate(OnHandRatio = `On Hand` / `Annual Demand`)
+```
+
+A. Creates a new variable called "inventory"\
+B. Creates a new variable called "OnHandRatio"\ +++
+C. Creates a new data frame called "OnHandRatio"
+
+**Question 10**: Using the "inventory" data frame, create a new data frame called "avg_cost" that contains the average "Cost per Unit (\$)" by each "Supplier" (let this quantity be in a variable called "SupplierAvgCost". Hint: Recall the summarize and group_by functions and the use of the backtick character. Your data frame should have only two columns:"Supplier" and "SupplierAvgCost".
+
+What is the "SupplierAvgCost" of items from supplier A?
+
+```{r}
+avg_cost = inventory %>% group_by('Supplier') %>% summarise(SupplierAvgCost = mean('Cost per Unit ($)'))
+```
+
+
+------------------------------------------------------------------------

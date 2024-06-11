@@ -1,0 +1,164 @@
+### Random Forests
+
+```{r}
+#| include: false
+library(titanic) 
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(mice)
+library(VIM)
+library(MASS)
+library(ranger) #for random forests
+library(randomForest) #for random forests
+library(e1071) 
+library(esquisse)
+library(vip) #for variable importance
+```
+
+### Moving Beyond Trees
+
+Positive aspects of classification trees:
+
+-   Easy to explain and visualize
+
+-   Mimic human decision-making better than other methods
+
+Negative aspects of classification trees:
+
+-   Not typically as powerful as other methods
+
+-   Unstable (trees can change dramatically with small changes to the data)
+
+Overcome the negative aspects by building "many" trees. To ensure that we get a "diversity" of trees (rather than just the same tree over and over again), we do two things:
+
+-   Build each tree in a random forest using a sample of the data. This sampling is done "with replacement". This means that the sample can contain multiple instances of the same row of data. The default sample size is equal to the number of rows in the dataset.
+
+-   At each split in each tree, take a random sample of the predictors. This results in each split being made on a subset of the predictors and prevents strong variables from overly dominating the tree. The default number of sampled variables is the square root of the number of variables (rounded down).
+
+Each tree is built independently with the default number of trees being 500. To classify an observation, we classify it with each of the trees in the model. Whatever classification gets the majority is classification assigned to the observation.
+
+![Random Forest (Image Source: Wikipedia)](Random_forest_explain.png){width="704"}
+
+### Building Random Forest Models
+
+Load Titanic Data from the titanic package.
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+Data cleanup as we've done many times before
+
+```{r}
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+
+#select only variables relevant to our analysis (these variables will be used for imputation of Age)
+titanic = titanic %>% dplyr::select(c("Survived","Pclass","Sex","Age","SibSp","Parch"))
+
+set.seed(123)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE) #imputes age
+titanic_complete = complete(imp_age) 
+summary(titanic_complete)
+```
+
+Training/testing split as usual.
+
+```{r}
+set.seed(123) 
+titanic_split = initial_split(titanic_complete, prop = 0.7, strata = Survived) #70% in training
+train = training(titanic_split) 
+test = testing(titanic_split)
+```
+
+### Random Forest (using the randomForest package, no tuning grid)
+
+For now, we'll use the "randomForest" package as the engine for our random forest model. We'll let R manage (tune) the model parameters (i.e., the number of variables selected at each split and the sample size selected for each tree).
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model = rand_forest() %>% 
+  set_engine("randomForest", importance = TRUE) %>% 
+  set_mode("classification")
+
+titanic_wflow = 
+  workflow() %>% 
+  add_model(rf_model) %>% 
+  add_recipe(titanic_recipe)
+
+set.seed(123) #need the seed here because of the randomness of random forest models
+titanic_fit = fit(titanic_wflow, train)
+```
+
+Examine model and important variables
+
+```{r}
+titanic_fit
+
+titanic_fit %>% 
+  extract_fit_parsnip() %>% 
+  vip()
+```
+
+Notice the number of trees that the model used and the number of variables used in the model (mtry).
+
+Training predictions
+
+```{r}
+predRF = predict(titanic_fit, train)
+confusionMatrix(predRF$.pred_class, train$Survived, positive = "Yes")
+```
+
+Test predictions
+
+```{r}
+predRFtest = predict(titanic_fit, test)
+confusionMatrix(predRFtest$.pred_class, test$Survived, positive = "Yes")
+```
+
+### Random Forest (using ranger package, no tuning grid)
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model2 = rand_forest() %>% 
+  set_engine("ranger", importance = "permutation") %>% 
+  set_mode("classification")
+
+titanic_wflow2 = 
+  workflow() %>% 
+  add_model(rf_model2) %>% 
+  add_recipe(titanic_recipe)
+
+set.seed(123) #need the seed here because of the randomness of random forest models
+titanic_fit2 = fit(titanic_wflow2, train)
+```
+
+Examine model and important variables.
+
+```{r}
+titanic_fit2
+
+titanic_fit2 %>% 
+  extract_fit_parsnip() %>% 
+  vip()
+```
+
+Training predictions
+
+```{r}
+predRF = predict(titanic_fit, train)
+confusionMatrix(predRF$.pred_class, train$Survived, positive = "Yes")
+```
+
+Test predictions
+
+```{r}
+predRFtest = predict(titanic_fit, test)
+confusionMatrix(predRFtest$.pred_class, test$Survived, positive = "Yes")
+```

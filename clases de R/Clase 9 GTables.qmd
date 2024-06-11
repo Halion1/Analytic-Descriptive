@@ -1,0 +1,110 @@
+---
+title: "gt"
+format: html
+editor: visual
+---
+
+## Tables in R with "gt"
+
+```{r}
+#| include: false
+library(tidyverse)
+library(gt)
+library(gtExtras)
+library(webshot2) #to enable saving gt tables to images
+```
+
+Tables are visualizations! They are also an "underrated" form of visualization. Consider using tables in situations where:
+
+-   Precision is important/required
+
+-   We are comparing variables with different units/magnitudes
+
+There are a variety of packages in R to make tables. My preference is the "gt" package.
+
+Let's look at how it works:
+
+```{r}
+diamonds = ggplot2::diamonds
+```
+
+Let's create a quick statistical summary:
+
+```{r}
+cut_means = diamonds %>% group_by(cut) %>% summarise(mean = mean(price))
+cut_means
+```
+
+On the most basic level, we pass our data to the "gt" function to generate a gt table:
+
+```{r}
+cut_means %>% gt()
+```
+
+This isn't terrible looking. We can save the table as an image using gtsave:
+
+```{r}
+# you may need to experiment with the expand parameter to get a good looking result
+cut_means %>% gt() %>% gtsave("table_1.png", expand = 10)
+```
+
+Let's enhance the table even more. Let's center the values in the mean column:
+
+```{r}
+cut_means %>% gt() %>%
+   cols_align(
+      align = "center",
+      columns = c(mean)
+    ) %>%
+    cols_align(
+      align = "left",
+      columns = c(cut)
+    )
+```
+
+Change the column labels:
+
+```{r}
+cut_means %>% gt() %>%
+   cols_align(
+      align = "center",
+      columns = c(mean)
+    ) %>%
+    cols_align(
+      align = "left",
+      columns = c(cut)
+    ) %>%
+    cols_label(
+      cut = md("**Cut**"), #adds bold formatting
+      mean = md("**Mean**"),
+  )
+```
+
+Adjust decimals displayed:
+
+```{r}
+cut_means %>% gt() %>%
+   cols_align(
+      align = "center",
+      columns = c(mean)
+    ) %>%
+    cols_align(
+      align = "left",
+      columns = c(cut)
+    ) %>%
+    cols_label(
+      cut = md("**Cut**"), #adds bold formatting
+      mean = md("**Mean**"),
+    ) %>%
+    fmt_number(
+      columns = mean,
+      decimals = 1,
+      use_seps = FALSE
+  )
+```
+
+For more info, see: <https://gt.rstudio.com/articles/intro-creating-gt-tables.html>
+
+The "gtExtras" package is also quite good: <https://jthomasmock.github.io/gtExtras/>
+
+See this link for a description on how to incorporate gt tables into a Shiny app: <https://gt.rstudio.com/reference/gt_output.html>

@@ -1,0 +1,308 @@
+---
+format:
+  html:
+    self-contained: true
+---
+
+### Linear Regression Introduction
+
+```{r}
+#| include: false
+#install.packages(c("tidyverse","GGally","gridExtra","MASS","esquisse"))
+library(tidyverse) 
+library(GGally) #ggpairs, if desired
+library(gridExtra) #for plots in grids, if desired
+library(MASS) #for stepwise
+library(esquisse)
+```
+
+Load the dataset. This is a VERY basic dataset with characteristics of cars from the mid-1970s.
+
+```{r}
+cars = mtcars #using default mtcars R dataset
+```
+
+Structure and Summary
+
+```{r}
+str(cars)
+summary(cars)
+
+# This next function shows first six rows of data (can be useful)
+head(cars) 
+```
+
+### Predictive Modeling Process
+
+CRISP-DM (Cross-Industry Standard Process for Data Mining) is a popular approach to build predictive models.
+
+Steps:
+
+1\. Gain problem/business understanding (Intuition)\
+2. Gain data understanding\
+3. Prepare (clean) data --\> Data should be consistent and technically correct\
+4. Build predictive model(s)\
+5. Evaluate model(s)\
+6. Deploy model for use
+
+### Problem Understanding
+
+Our objective is to use car characteristics to predict gas mileage.
+
+### Data Understanding
+
+Where is this data from? What context? Any limitations to its use?
+
+### Data Preparation
+
+Consistent and technically correct data should have the following characteristics:
+
+-   Data should have no missingness (or missingness should be explained)
+
+-   Data should be tabular
+
+-   Data should be in correct types
+
+-   Outliers in data should be eliminated or explained
+
+-   Logical inconsistencies should be addressed
+
+### Visualization
+
+Let's visualize the data.
+
+```{r}
+ggpairs(cars)
+```
+
+More than eight or ten variables is hard to view at once, so view subsets of variables. What does the "1" in the code below mean and why are we using it?
+
+```{r}
+ggpairs(cars, columns = c(2:6,1)) 
+ggpairs(cars, columns = c(7:11,1))
+```
+
+### Correlation
+
+Visualization of just correlation.
+
+```{r}
+ggcorr(cars, label = TRUE, label_color = "black", label_round = 2)
+```
+
+Which variable appears to best predict "mpg"? This variable will have strongest correlation with mpg. Recall that the strongest correlation is closest to 1 or -1.
+
+Looking closer at mpg and wt. What doe this relationship look like?
+
+```{r}
+ggplot(cars,aes(x=wt,y=mpg)) + geom_point() + theme_bw()
+```
+
+### Build Model(s)
+
+Linear regression: A linear model with one or more "x" (predictor or independent) variables to predict a single "y" (response or dependent) variable. The "y" variable needs to quantitative.
+
+Linear regression assumptions:
+
+-   Linear relationship between the x variable(s) and the y variable
+
+-   No correlation between consecutive residuals (errors)
+
+-   Constant variance of residuals
+
+-   Residuals normally distributed
+
+Linear regression model for mpg (using basic R syntax). We'll use a different framework later for model development that will be more flexible for different model types.
+
+```{r}
+model1 = lm(mpg ~ wt, cars)
+summary(model1)
+```
+
+What is the regression equation?
+
+mpg = 37.3 - 5.3\*wt
+
+37.3 = y intercept
+
+-5.3 = slope
+
+Is weight a significant predictor of mpg?
+
+Is the model good? Look at the R-squared value
+
+### Develop Predictions and Residuals
+
+Let's visualize the predictions and residuals.
+
+```{r}
+#create a new variable called predicted1 to hold the predictions from model1 and a variable
+#called residuals1 to hold the residuals from model1
+cars = cars %>% mutate(predicted1 = predict(model1)) %>%
+  mutate(residuals1 = residuals(model1))
+summary(cars)
+```
+
+Plot of data with regression line
+
+```{r}
+#note use of geom_smooth to add the regression line
+ggplot(cars, aes(x = wt, y = mpg)) + geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") + theme_bw() 
+```
+
+Plot of data, regression line, and residuals.
+
+```{r}
+ggplot(cars, aes(x = wt, y = mpg)) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  
+  geom_segment(aes(xend = wt, yend = predicted1), alpha = .5) +  
+  geom_point(size=3) +
+  geom_point(aes(y = predicted1), shape = 1) +
+  theme_bw()  
+```
+
+Plot of residuals and wt. This is a diagnostic plot. There should ideally be no visible pattern in the residuals.
+
+```{r}
+ggplot(cars, aes(x = wt, y = residuals1)) + geom_point() + theme_bw() 
+```
+
+Do we see a pattern?
+
+Our next diagnostic plot is a histogram of residuals. The residuals should be normally distributed. Note that it will be hard to conclude much of anything from such a small dataset.
+
+```{r}
+ggplot(cars,aes(x=residuals1)) + geom_histogram(bins=20) + theme_bw()
+```
+
+### Looking at a Different Dataset
+
+```{r}
+ames = read_csv("AmesHousing.csv")
+```
+
+```{r}
+str(ames)
+summary(ames)
+```
+
+Convert "Fireplace" to a factor as it is categorical (Yes or No). Same with "OverallQual".
+
+```{r}
+ames = ames %>% mutate(Fireplace = as_factor(Fireplace)) %>%
+  mutate(OverallQual = as_factor(OverallQual))
+```
+
+Our response variable is "SalePrice".
+
+Let's visualize.
+
+```{r}
+p1 = ggplot(ames,aes(x=LotArea,y=SalePrice)) + geom_point()
+p2 = ggplot(ames,aes(x=OverallQual,y=SalePrice)) + geom_boxplot()
+p3 = ggplot(ames,aes(x=YearBuilt,y=SalePrice)) + geom_point()
+p4 = ggplot(ames,aes(x=GrLivArea,y=SalePrice)) + geom_point()
+grid.arrange(p1,p2,p3,p4,ncol=2)
+
+p1 = ggplot(ames,aes(x=TotBath,y=SalePrice)) + geom_point()
+p2 = ggplot(ames,aes(x=BedroomAbvGr,y=SalePrice)) + geom_point()
+p3 = ggplot(ames,aes(x=Fireplace,y=SalePrice)) + geom_boxplot()
+grid.arrange(p1,p2,p3,ncol=2)
+
+
+```
+
+We could probably do some outlier trimming here.
+
+Let's look at correlation.
+
+```{r}
+ggcorr(ames, label_round = 2, label = TRUE)
+```
+
+Now let's build a model with the "best" variable to predict "SalePrice."
+
+```{r}
+model1 = lm(SalePrice ~ GrLivArea, ames)
+summary(model1)
+```
+
+Is GrLivArea a significant predictor?
+
+Now let's build a model with the two "best" variables.
+
+```{r}
+#Model here
+model2 = lm(SalePrice ~ GrLivArea + TotBath, ames)
+summary(model2)
+```
+
+We could continue to add variables one at a time, stopping when the model no longer improves.
+
+Build a model with all predictor variables. Note the syntax.
+
+```{r}
+model3 = lm(SalePrice ~., ames)
+summary(model3)
+```
+
+Why are the Fireplace and OverallQual variables treated differently?
+
+#### Stepwise Methods
+
+We can use automated techniques to build regression models. There are a variety of techniques, but the two most popular are: forward and backward stepwise.
+
+**CAUTION**: Using an automated technique can be dangerous. You must still use your intuition about the data. You must still clean and prepare the data. Never blindly accept a model generated by one of these techniques without carefully evaluating it!
+
+Start by building two models: One model that contains all of the predictors and one that is empty.
+
+```{r}
+allmod = lm(SalePrice ~., ames) 
+summary(allmod)
+
+emptymod = lm(SalePrice ~1, ames) #use ~1 to build an empty model
+summary(emptymod)
+```
+
+```{r}
+#backward
+backmod = stepAIC(allmod, direction = "backward", 
+                      trace = TRUE) #trace = TRUE shows how the model is built 
+summary(backmod)
+```
+
+```{r}
+#forward
+forwardmod = stepAIC(emptymod, direction = "forward", scope=list(upper=allmod,lower=emptymod), trace = TRUE) 
+summary(forwardmod) 
+```
+
+Since the models are the same, I just chose the forward model as the "champion" model.
+
+Perform model diagnostics. Histogram of residuals and residuals plots (only necessary for quantitative variables)
+
+```{r}
+ames = ames %>% mutate(predforward = predict(forwardmod)) %>%
+  mutate(predresid = residuals(forwardmod))
+summary(ames)
+```
+
+Histogram of residuals --\> Should be normally distributed
+
+```{r}
+ggplot(ames,aes(x=predresid)) + geom_histogram(bins=20) + theme_bw()
+```
+
+Plot of residuals versus each x variable. Doesn't make much sense to look at categorical variables, but you can.
+
+```{r}
+p1 = ggplot(ames, aes(x = LotArea, y = predresid)) + geom_point() + theme_bw() 
+p2 = ggplot(ames, aes(x = YearBuilt, y = predresid)) + geom_point() + theme_bw() 
+p3 = ggplot(ames, aes(x = GrLivArea, y = predresid)) + geom_point() + theme_bw() 
+p4 = ggplot(ames, aes(x = TotBath, y = predresid)) + geom_point() + theme_bw() 
+p5 = ggplot(ames, aes(x = BedroomAbvGr, y = predresid)) + geom_point() + theme_bw()
+grid.arrange(p1,p2,p3,p4,p5,ncol=2)
+```
+
+There are definitely some "outlier" residual values. It may be worth eliminating outliers prior to model construction.

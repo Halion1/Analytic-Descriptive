@@ -1,0 +1,167 @@
+## Linear Regression with Tidymodels
+
+Libraries
+
+```{r}
+#| include: false
+library(tidyverse)
+library(tidymodels) #new package
+library(GGally) 
+library(gridExtra)
+```
+
+Read-in dataset
+
+```{r}
+ames = read_csv("AmesHousing.csv")
+```
+
+```{r}
+str(ames)
+summary(ames)
+```
+
+Factor conversions
+
+```{r}
+ames = ames %>% mutate(OverallQual = as_factor(OverallQual)) %>% 
+  mutate(Fireplace = as_factor(Fireplace)) 
+
+str(ames)
+summary(ames)
+```
+
+Quick visualization and correlations were done in a previous lecture.
+
+A simple linear regression model with the GrLivArea variable. This model is built using the Tidymodels framework.
+
+```{r}
+#specify the "recipe"
+ames_recipe = recipe(SalePrice ~ GrLivArea, data = ames) %>%
+  step_dummy(all_nominal()) #necessary because we have categorical predictors
+
+#specify the model type and engine
+lm_model = 
+  linear_reg() %>% #model type for linear regression
+  set_engine("lm") #engine for typical linear regression model
+
+#link the model and recipe together into a workflow
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(ames_recipe)
+```
+
+Let's look at each element of the workflow.
+
+```{r}
+ames_recipe
+```
+
+```{r}
+lm_model
+```
+
+```{r}
+lm_wflow
+```
+
+Now fit (build) the actual model (on the ames dataframe)
+
+```{r}
+lm_fit = fit(lm_wflow, ames)
+```
+
+View the fit
+
+```{r}
+lm_fit
+```
+
+We can get a more traditional view of the model output with the "tidy" function.
+
+```{r}
+tidy(lm_fit)
+```
+
+We can see overall model performance metrics with "glance".
+
+```{r}
+glance(lm_fit)
+```
+
+Repeat the same thing, but with the OverallQual variable added.
+
+```{r}
+#specify the "recipe"
+ames_recipe2 = recipe(SalePrice ~ GrLivArea + OverallQual, data = ames) %>%
+  step_dummy(all_nominal()) #ensures that the model treats categorical variables properly
+
+#specify the model type and engine
+#Note this is unchanged from previous tidymodels model, could just re-use that one
+lm_model = 
+  linear_reg() %>% #model type for linear regression
+  set_engine("lm") #engine for typical linear regression model
+
+#link the model and recipe together into a workflow
+lm_wflow2 = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(ames_recipe2)
+```
+
+Now fit (build) the actual model.
+
+```{r}
+lm_fit2 = fit(lm_wflow2, ames)
+```
+
+View the model.
+
+```{r}
+options(scipen = 999) #suppresses scientific notation
+tidy(lm_fit2)
+```
+
+See overall model performance metrics with "glance".
+
+```{r}
+glance(lm_fit2)
+```
+
+Final model
+
+```{r}
+final_mod = lm_fit2 %>% extract_fit_parsnip()
+```
+
+We can do our linear regression model diagnostics as we did before. Note the use of the "augment" function. This creates a column called ".pred".
+
+```{r}
+#augment requires a data frame to be provided, the . passes the piped data frame
+ames = ames %>% augment(lm_fit,.) 
+summary(ames)
+```
+
+Manually add the residuals
+
+```{r}
+#residual = actual - predicted
+ames = ames %>% mutate(residuals1 = SalePrice - .pred)
+```
+
+Examining residuals (only necessary for quantitative variables)
+
+```{r}
+ggplot(ames,aes(x=GrLivArea,y=residuals1)) + geom_point()
+```
+
+```{r}
+ggplot(ames,aes(x=residuals1)) + geom_histogram(bins=25) + theme_bw()
+```
+
+A few things to note:
+
+-   The Tidymodels framework seems more complicated than the basic linear regression model syntax. It is. However, this framework is consistent and can be used for many model types with minimal modification.
+
+-   There is no stepwise regression method associated with Tidymodels.

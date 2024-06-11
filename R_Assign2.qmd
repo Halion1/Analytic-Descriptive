@@ -1,0 +1,116 @@
+---
+format:
+  html:
+    embed-resources: true
+---
+
+## R and RStudio Assignment 2
+
+In this assignment you will complete a variety of data visualization tasks in R/RStudio
+
+**Deliverable:** The deliverable for this assignment is a rendered HTML document that you will upload to Canvas. Your submission will be manually graded by your instructor.
+
+You may use the "esquisse" package to help you (if you wish).
+
+```{r}
+#| include: false
+library(tidyverse) #our standard package for working in R
+library(esquisse) #a visualization helper package (may not be needed)
+library(gapminder) #contains a dataset that we will need
+```
+
+------------------------------------------------------------------------
+
+**Question 1**: The "gapminder" package includes a dataset containing data on demographic and economic data for many nations. Use the line of code below to read in this dataset into a data frame called "gap".
+
+```{r}
+gap = gapminder::gapminder
+```
+
+How many rows and columns are in this dataset?
+Rows 1704
+Columns 6
+
+**Question 2**: Use a filter to create a dataframe called "peru" that contains only the data for the country of Peru.
+
+```{r}
+peru = gap %>% filter(country == 'Peru')
+```
+
+
+How many rows and columns are in this dataset?
+Rows 12
+Columns 6
+
+**Question 3**: Create an appropriate visualization of Peru's population over time (time is given by the "year" variable). Comment on the change in population over time.
+
+```{r}
+# Plot
+peru %>%
+  tail(10) %>%
+  ggplot( aes(x=year, y=pop)) +
+    geom_line() +
+    geom_point()
+```
+
+
+**Question 4**: Use the "gap" dataframe and make a histogram of life expectancy (lifeExp) in the year 2007. Comment on the resulting visualization. Hint: It is possible to use a %\>% with a filter in conjunction with the ggplot function.
+
+```{r}
+graph = gap %>% filter(year == 2007)
+ggplot(graph,aes(x=lifeExp)) + geom_histogram() + theme_bw()
+```
+the distribution of this graph is negative
+
+**Question 5**: Recreate your histogram from Question 4, but facet by continent. Comment on the resulting visualization.
+
+```{r}
+ggplot(graph,aes(x=lifeExp)) + geom_histogram() + 
+  facet_wrap(~continent) + theme_bw() 
+```
+It looks like in Europe and Oceania there is the biggest life Expectancy in comparison to the other continents
+
+**Question 6**: Create a bar chart of the life expectancy of nations in the "Americas" in the year 2007. The countries should be sorted in descending order of life expectancy.
+
+Hint: You will need to use "reorder(country,-lifeExp)" when you define your x variable in the aes. You may find it useful to flip the coordinates (with "coord_flip') to make it easier to read your chart. If you do this, then you should remove the"-" from in front of "lifeExp" in your reorder function.
+
+```{r}
+graph2 = gap %>% filter(continent == "Americas")
+graph2 = graph2 %>% filter(year == 2007)
+graph2  %>% 
+ggplot(aes(x=reorder(country,-lifeExp), y=lifeExp)) + geom_bar(stat="identity", alpha=.6, width=.4) +
+    coord_flip()+ theme_bw()
+```
+
+
+**Question 7:** Use Google to identify the Hex color code for the red in the flag of Peru.
+
+This task will be a bit challenging, but I'll provide some hints. Our objective is to recreate the chart from Question 6, but with Peru's bar in the chart colored the red color from the nation's flag. The remainder of the bars should be gray (use the color "grey50"). Highlighting Peru is an example of the use of a preattentive attribute.
+
+Hint 1: We'll use a fill in the aes. The code will look like this:
+
+fill=factor(ifelse(country=="Peru","Highlighted","Normal"))
+
+This code uses an ifelse statement to determine if the the country in each bar is Peru or not. Peru is added to a group called "Highlighted". The other countries are grouped into "Normal".
+
+Hint 2: We then use scale_fill_manual to control the colors used in the fill (replace the X's in the values below the the Hex code for the red in Peru's flag):
+
+scale_fill_manual(name = "country", values=c("#XXXXX","grey50"))
+
+```{r}
+graph2 = gap %>% filter(continent == "Americas")
+graph2 = graph2 %>% filter(year == 2007)
+p <- graph2  %>% 
+ggplot()+ aes(x=reorder(country,lifeExp), y = lifeExp, fill=factor(ifelse(country=="Peru","Highlighted","Normal"))) + geom_col() +
+    coord_flip()+ theme_bw()
+p + scale_fill_manual(name = "country", values=c("#D91023","grey50"))
+```
+
+**Question 8:** Build a boxplot to show the distribution of life expectancy by continent for the year 2007.
+
+```{r}
+ques8 = gap %>% filter(year == 2007)
+ggplot(ques8, aes(x=continent, y=lifeExp)) + geom_boxplot() + theme_bw()
+```
+
+

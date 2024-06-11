@@ -1,0 +1,159 @@
+---
+format:
+  html:
+    embed-resources: true
+---
+
+## Simple Linear Regression and Correlation
+
+**Deliverable:** Each question in the assignment corresponds to a question in the Canvas quiz associated with this assignment.
+
+```{r}
+#| include: false
+library(tidyverse)
+library(GGally)
+library(lmtest)
+library(esquisse)
+library(tidymodels)
+```
+
+Read-in the "airquality" data set (a default R dataset) as a dataframe called "air". To do this use the code below:
+
+```{r}
+air = airquality
+```
+
+Details concerning this dataset can be found here: <http://rpubs.com/Nitika/linearRegression_Airquality>.
+
+------------------------------------------------------------------------
+
+**Question 1**: How many rows are in the "air" dataframe?
+
+```{r}
+nrow(air)
+```
+
+**Question 2**: How many columns are in the "air" dataframe?
+
+```{r}
+ncol(air)
+```
+
+**Question 3**: True/False: There is missing data in "Ozone" variable in the dataframe.
+
+You can see missing data via a "summary". Missing values are shown as "NA's" in the summary. The "Ozone" and "Solar.R" variables both contain missing values.
+
+```{r}
+summary(air)
+```
+
+**Question 4** Which variable is most likely to be the response (Y) variable? Hint: One of these variable has environmental implications and it would be important to predict its presence and quantity.
+
+**A. Ozone**\
+B. Solar.R\
+C. Wind\
+D. Temp\
+E. Month\
+F. Day
+
+We are likely trying to predict "Ozone" so it is the most likely response variable.
+
+------------------------------------------------------------------------
+
+We have three approaches that we can typically select from to deal with missing data:
+
+1.  Delete the rows with missing data\
+2.  Delete the columns with missing data\
+3.  Impute (i.e., estimate or guess) values to replace the missing values
+
+Here we'll choose to delete rows with any missing data. Use the code below to apply the "drop_na" function to the "air" dataframe. The resulting dataframe will be called "air2". You will use this dataframe for the remainder of the assignment.
+
+```{r}
+air2 = air %>% drop_na()
+```
+
+**Question 5** How many rows remain in this new (air2) data frame?
+
+```{r}
+nrow(air2)
+```
+
+**Question 6** How many columns remain in this new (air2) data frame?
+
+```{r}
+ncol(air2)
+```
+
+------------------------------------------------------------------------
+
+Use the "ggcorr" function to develop a correlation matrix for the variables. Hint: Use "label = TRUE" in the "ggcorr" function to show the correlation values and "label_round = 2" to show two decimal places.
+
+```{r}
+ggcorr(air2, label = TRUE, label_round = 2)
+```
+
+**Question 7** Which variable is most strongly correlated with the "Ozone" variable?
+
+A. Solar.R\
+B. Wind\
+**C. Temp**\
+D. Month\
+E. Day
+
+Temp is most strongly correlated with a value of 0.699
+
+**Question 8** Which variable is least strongly correlated with the "Ozone" variable?
+
+A. Solar.R\
+B. Wind\
+C. Temp\
+D. Month\
+**E. Day**
+
+Day is the least correlated with a value of -0.005.
+
+**Question 9** Plot "Temp" (x axis) versus "Ozone" (y axis) using the "ggplot" function. Choose an appropriate chart type. Which statement best describes the relationship between "Temp" and "Ozone"?
+
+```{r}
+ggplot(air2, aes(x=Temp,y=Ozone)) + geom_point() + theme_bw()
+```
+
+A. As Temp increases, Ozone decreases
+
+B. As Temp increases there is no noticeable change in Ozone
+
+**C. As Temp increases, Ozone increases**
+
+------------------------------------------------------------------------
+
+Create a linear regression model using "Temp" to predict "Ozone".
+
+```{r}
+mod1 = lm(Ozone ~ Temp, air2)
+
+summary(mod1)
+```
+
+**Question 10** What is the slope of this regression model (to four decimal places)?
+
+The slope of the regression model is 2.4391.
+
+**Question 11** what is the R-squared value of this model (not Adjusted R-squared) (to three decimal places)?
+
+The R-squared value is 0.488.
+
+**Question 12** Is the "Temp" variable significant in the model?
+
+A. **Yes**\
+B. No\
+C. Cannot be determined
+
+The Temp variable is significant (has a p-value less than 0.05).
+
+**Question 13**: Using your linear regression model with "Temp" to predict "Ozone", what is the predicted "Ozone" value when "Temp" is equal to 80 (to two decimal places)?
+
+```{r}
+predict(lm_fit,data.frame("Temp"=80))
+```
+
+For a "Temp" value of 80, we would predict "Ozone" to be 47.48.

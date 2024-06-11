@@ -1,0 +1,46 @@
+---
+format:
+  html:
+    self-contained: true
+---
+
+
+### Esquisse Package Demonstration with the Diamonds Data from ggplot2
+
+Note the use of include = FALSE in the package loading chunk. This code suppresses chunk output and hides the chunk when rendered.
+
+
+```{r}
+#| include = FALSE 
+#install.packages("tidyverse","esquisse")
+library(tidyverse)
+library(esquisse)
+```
+
+
+Load the data. It's attached to the ggplot2 package (part of the Tidyverse).
+
+
+```{r}
+diamonds = ggplot2::diamonds
+```
+
+```{r}
+summary(diamonds) #examine the summary of the data frame
+str(diamonds) #examine the structure of the data frame
+```
+
+
+Next let's use the esquisse package to create a plot.
+
+
+```{r}
+#now let's use the esquisse package to develop a plot (be sure to place your cursor in the line below esquisser() before running this code chunk
+#if you see a red bar to left of the chunk after running you can disregard
+#after you have generated your plot code, place a # in front of esquisser() to comment it out
+esquisser() 
+
+
+
+```
+

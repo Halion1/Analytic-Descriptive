@@ -1,0 +1,54 @@
+---
+title: "Demo"
+format:
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Quarto
+
+```{r}
+#| include: false
+library(tidyverse)
+```
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+#| label: simple_calc
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+Another example:
+
+```{r}
+#| echo: false
+ggplot(diamonds,aes(x=carat,y=price)) + geom_point(alpha=0.1)
+```
+
+As we've seen before, include: false will suppress the code AND the output when rendering.
+
+```{r}
+#| include: false
+2 * 2
+```
+
+There are `r nrow(diamonds)` rows in the diamonds dataframe.
+
+Demonstrate inserting an image.
+
+![DALL-E Art](dalle.png){fig-align="center" width="284"}

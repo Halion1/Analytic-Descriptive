@@ -1,0 +1,162 @@
+---
+title: "Titanic Trees Tuning"
+format: html
+editor: visual
+---
+
+## Titanic Classification Trees with Tuning
+
+```{r}
+#| include:  false
+library(tidyverse) 
+library(tidymodels)
+library(caret)
+library(titanic)
+library(rpart) #trees
+library(rpart.plot) #for plotting trees
+library(rattle) #trees
+library(RColorBrewer) #trees
+library(e1071)
+library(VIM) #missing data
+library(mice) #missing data
+```
+
+### Clean and Prep
+
+Usual cleaning and prep work on the Titanic data frame.
+
+```{r}
+titanic = titanic::titanic_train
+
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+
+titanic = titanic %>% select(c("Survived","Pclass","Sex","Age","SibSp","Parch"))
+
+set.seed(123)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE)
+
+titanic_complete = complete(imp_age) 
+```
+
+### Data Splitting
+
+Split as usual.
+
+```{r}
+set.seed(123) 
+titanic_split = initial_split(titanic_complete, prop = 0.7, strata = Survived) #70% in training
+train = training(titanic_split) 
+test = testing(titanic_split)
+```
+
+### Set-up for Tuning
+
+We'll use k-fold cross-validation to tune the classification tree complexity parameter (cp). When we tune a parameter we will try different values of cp to find the "best" value to maximize accuracy (or an alternative objective).
+
+Recall that k-fold cross-validation works by splitting the training set into k parts. Models are built by holding out a validation fold and repeating across all k of the validation folds (see figure below). Model performance is then averaged from the k resulting models.
+
+![k-Fold Cross-Validation](kfold.png){width="459"}
+
+Let's set up our folds. Here we are using 5 folds. Typical numbers of folds are 10, 5, or 3. More folds leads to more models and can take more computation time.
+
+```{r}
+set.seed(234)
+folds = vfold_cv(train, v = 5)
+```
+
+Now set up our model with Tidymodels. Note the differences in syntax due to the tuning of cp and the use of k-folds.
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(),-all_outcomes()) #added just to be cautious
+
+tree_model = decision_tree(cost_complexity = tune()) %>% #added to indicate tuning of cp value
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+tree_grid = grid_regular(cost_complexity(),
+                          levels = 25) #try 25 sensible values for cp
+
+titanic_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(titanic_recipe)
+
+tree_res = #set-up the resamples
+  titanic_wflow %>% 
+  tune_grid(
+    resamples = folds,
+    grid = tree_grid
+    )
+```
+
+The code above will result in multiple models being generated. We will try 25 cp values across 5 folds. So the total number of models will be 25 times 5 (125).
+
+We can look at how model peformance changes by cp value.
+
+```{r}
+tree_res %>%
+  collect_metrics() %>%
+  ggplot(aes(cost_complexity, mean)) +
+  geom_line(size = 1.5, alpha = 0.6) +
+  geom_point(size = 2) +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) 
+```
+
+Now find the tree associated with the best cp value.
+
+```{r}
+best_tree = tree_res %>%
+  select_best("accuracy")
+
+best_tree
+```
+
+Finalize the workflow with the best cp value
+
+```{r}
+final_wf = 
+  titanic_wflow %>% 
+  finalize_workflow(best_tree)
+```
+
+Examine the tree associated with the "best" cp value
+
+```{r}
+final_fit = fit(final_wf, train)
+
+tree = final_fit %>% 
+  extract_fit_parsnip() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree, tweak = 1.5) 
+
+```
+
+Predictions on training set
+
+```{r}
+treepred = predict(final_fit, train, type = "class")
+head(treepred)
+```
+
+Caret confusion matrix and accuracy, etc. calcs
+
+```{r}
+confusionMatrix(treepred$.pred_class,train$Survived,positive="Yes") #predictions first then actual
+```
+
+Predictions on the testing set
+
+```{r}
+treepred_test = predict(final_fit, test, type = "class")
+head(treepred_test)
+```
+
+```{r}
+confusionMatrix(treepred_test$.pred_class,test$Survived,positive="Yes") 
+```
+
+\

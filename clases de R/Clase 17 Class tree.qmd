@@ -1,0 +1,187 @@
+**Classification Trees**
+
+Libraries
+
+```{r}
+#| include: false
+library(tidyverse) 
+library(tidymodels)
+library(caret)
+library(titanic)
+library(rpart) #trees
+library(rpart.plot) #for plotting trees
+library(rattle) #trees
+library(RColorBrewer) #trees
+library(e1071)
+library(VIM) #missing data
+library(mice) #missing data
+```
+
+Let's introduce a new kind of model for binary classification problems (i.e., when we have a categorical response variable with two categories. This model is called a "classification tree". Let's see how it works.
+
+![Oranges and Lemons Measurements (Source: Iain Murray, University of Edinburgh)](oranges_lemons.png)
+
+Let's build classification trees on our usual Titanic dataset.
+
+### Read-in data, clean, and prepare for analysis (prior to split)
+
+```{r}
+titanic = titanic::titanic_train
+
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+
+titanic = titanic %>% select(c("Survived","Pclass","Sex","Age","SibSp","Parch"))
+
+set.seed(123)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE)
+
+titanic_complete = complete(imp_age) 
+```
+
+### Split the data
+
+```{r}
+set.seed(123) 
+titanic_split = initial_split(titanic_complete, prop = 0.7, strata = Survived) #70% in training
+train = training(titanic_split) 
+test = testing(titanic_split)
+```
+
+Modeling Note: A per our normal predictive analytics workflow, we would do visualization here, but we have done that many times for this data).
+
+### Tree-Building
+
+```{r}
+titanic_recipe = recipe(Survived ~ Age, train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+titanic_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(titanic_recipe)
+
+titanic_fit = fit(titanic_wflow, train)
+```
+
+How do we look at the tree?
+
+```{r}
+#look at the tree's fit
+titanic_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  
+```
+
+```{r}
+#extract the tree's fit from the fit object
+tree = titanic_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+#plot the tree
+rpart.plot(tree)
+```
+
+A better plot of the tree.
+
+```{r}
+fancyRpartPlot(tree) 
+```
+
+So how do we read this tree? Start at the top where we see a statement "age \>=6.5". We then see two branches emerging from this statement. To left is interpreted as "True" and to the right is interpreted as "False".
+
+So what would we predict for an individual that is 12 years old? How about a 6 year old?
+
+```{r}
+titanic_fit$fit$fit$fit$cptable
+```
+
+What is this "cp" thing?
+
+cp is called the complexity parameter and is used to control the size (growth) of the tree and to help find the optimal tree size. In order to make a new split, the algorithm considers how much benefit will come from the new split. If the benefit is greater than the cp value, then the tree will split. If not, it won't.
+
+We can manually adjust the cp value if we wish. Here we'll do this to see the effect changing cp has on the resulting tree.
+
+```{r}
+titanic_recipe = recipe(Survived ~ Age, train)
+
+tree_model = decision_tree(cost_complexity = 0.001) %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+titanic_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(titanic_recipe)
+
+titanic_fit = fit(titanic_wflow, train)
+```
+
+```{r}
+#extract the tree's fit from the fit object
+tree = titanic_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree) 
+```
+
+This tree probably overfits!! (Good for the training data, bad on testing data).
+
+How do we select the best value for cp? For now, we'll let R do that, but in the next lecture we'll look at how to "tune" cp to give us the "best" results.
+
+```{r}
+titanic_recipe = recipe(Survived ~ Age + Pclass + Sex + SibSp + Parch, train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+titanic_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(titanic_recipe)
+
+titanic_fit = fit(titanic_wflow, train)
+```
+
+```{r}
+#extract the tree's fit from the fit object
+tree = titanic_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+fancyRpartPlot(tree) 
+```
+
+Let's take a moment and talk our way through this tree. Does it seem logical?
+
+We can look at our confusion matrix to evaluate the performance of this model on the training set. No need to fiddle around with ROCR and thresholds:
+
+```{r}
+#first develop predictions on the training set
+treepred = predict(titanic_fit, train, type = "class")
+```
+
+```{r}
+confusionMatrix(treepred$.pred_class, train$Survived,positive = "Yes")
+```
+
+Now predictions on the test dataset:
+
+```{r}
+treetest = predict(titanic_fit, test, type = "class")
+```
+
+Accuracy of the model on the test dataset:
+
+```{r}
+confusionMatrix(treetest$.pred_class, test$Survived, positive = "Yes")
+```
+
+There is some performance drop-off, but it does not appear to be severe.

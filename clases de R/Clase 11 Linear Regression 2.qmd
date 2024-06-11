@@ -1,0 +1,52 @@
+---
+format:
+  html:
+    embed-resources: true
+---
+
+```{r}
+#| include: false
+library(tidyverse)
+library(GGally)
+```
+
+```{r}
+salary = read_csv("Salary_Data.csv")
+```
+
+```{r}
+str(salary)
+summary(salary)
+```
+
+Look at correlation.
+
+```{r}
+ggcorr(salary, label = TRUE, label_round = 2)
+```
+
+All of the variables are highly correlated with each other. This is a concerning sign.
+
+```{r}
+mod1 = lm(Salary ~ YearsExperience, salary)
+summary(mod1)
+```
+
+```{r}
+mod2 = lm(Salary ~ Age, salary)
+summary(mod2)
+```
+
+What happens when we try to enhance the model by adding both variables are predictors?
+
+```{r}
+mod3 = lm(Salary ~ YearsExperience + Age, salary)
+summary(mod3)
+```
+
+This is an extreme case of multicollinearity. In other cases we would look for the following:
+
+1.  Incorrect signs (signs flip from the proper direction to the incorrect direction)
+2.  Poor p-values for one or more variables
+
+Easiest way to address multicollinearity is to eliminate the weaker of the variables.

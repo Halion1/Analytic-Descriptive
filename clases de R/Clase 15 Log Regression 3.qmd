@@ -1,0 +1,307 @@
+## **More Logistic Regression**
+
+```{r}
+#| include: false
+library(tidyverse) 
+library(tidymodels)
+library(ROCR) #for ROC curve development (help with threshold selection)
+library(VIM) #for checking on missing data
+library(skimr)
+```
+
+We will use a version of the Framingham Heart Study dataset. This study is a famous, longitudinal study of cardiovascular disease risk factors that first began in 1948. The response variable is "TenYearCHD" which is a binary variable that indicates whether or not a study participant developed coronary heart disease within a ten year period from the time that the risk factors were observed.
+
+```{r}
+heart = read_csv("framingham.csv")
+str(heart)
+skim(heart)
+```
+
+The following variables in the dataset are categorical and should be converted to factors: male, education, currentSmoker, BPMeds, prevalentStroke, prevalentHyp, diabetes, and TenYearCHD. Code to do this is given below. Use "str" to verify that these conversions were successful.
+
+```{r}
+#use a shortcut to select certain variables to convert to factors
+heart = heart %>% mutate_at(c("male","education","currentSmoker","BPMeds","prevalentStroke",
+                              "prevalentHyp","diabetes","TenYearCHD"),as_factor)
+str(heart)
+```
+
+Rename variable levels:
+
+```{r}
+heart = heart %>% mutate(male = fct_recode(male, "Yes"="1","No"="0")) %>%
+  mutate(currentSmoker = fct_recode(currentSmoker, "Yes"="1","No"="0")) %>%
+  mutate(BPMeds = fct_recode(BPMeds, "Yes"="1","No"="0")) %>%
+  mutate(prevalentStroke = fct_recode(prevalentStroke, "Yes"="1","No"="0")) %>%
+  mutate(prevalentHyp = fct_recode(prevalentHyp, "Yes"="1","No"="0")) %>%
+  mutate(diabetes = fct_recode(diabetes, "Yes"="1","No"="0")) %>%
+  mutate(TenYearCHD = fct_recode(TenYearCHD, "Yes"="1","No"="0")) %>%
+  mutate(education = fct_recode(education, "Some HS"="1", "HS"="2",
+                                "Some College"="3", "College or More"="4"))
+str(heart)
+```
+
+Check missingness
+
+```{r}
+vim_plot = aggr(heart, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+How should we proceed in handling the missing data?
+
+```{r}
+heart = heart %>% select(-glucose) #deleting the glucose column
+heart = heart %>% drop_na() #deleting any row with missingness
+vim_plot = aggr(heart, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+Split the data
+
+```{r}
+set.seed(1234)
+heart_split = initial_split(heart, prop = 0.7, strata = TenYearCHD)
+train = training(heart_split)
+test = testing(heart_split)
+```
+
+### Visualizations
+
+```{r}
+#note the use of position = "fill"
+ggplot(train,aes(x=male,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=age)) + geom_boxplot() + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=education,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=currentSmoker,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=cigsPerDay)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=BPMeds,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=prevalentStroke,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=prevalentHyp,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=diabetes,fill=TenYearCHD)) + geom_bar(position = "fill") + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=totChol)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=sysBP)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=diaBP)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=BMI)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+```{r}
+ggplot(train,aes(x=TenYearCHD, y=heartRate)) + geom_boxplot() + geom_jitter(alpha = 0.1) + theme_bw()
+```
+
+### Models
+
+```{r}
+logreg_model = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe = recipe(TenYearCHD ~ diabetes , data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(logreg_recipe) %>% 
+  add_model(logreg_model)
+
+logreg_fit = fit(logreg_wf,train)
+```
+
+```{r}
+options(scipen = 999)
+tidy(logreg_fit)
+glance(logreg_fit)
+```
+
+How do we feel about this model?
+
+```{r}
+logreg_model2 = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe2 = recipe(TenYearCHD ~., data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf2 = workflow() %>%
+  add_recipe(logreg_recipe2) %>% 
+  add_model(logreg_model2)
+
+logreg_fit2 = fit(logreg_wf2,train)
+```
+
+```{r}
+tidy(logreg_fit2)
+glance(logreg_fit2)
+```
+
+```{r}
+logreg2_output = tidy(logreg_fit2)
+logreg2_output = logreg2_output %>% select(term, estimate, p.value)
+logreg2_output
+```
+
+How do we feel about this model?
+
+Significant variables: age, sysBP, male, education, diabetes
+
+```{r}
+logreg_model3 = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe3 = recipe(TenYearCHD ~age+sysBP+male+education+diabetes, data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf3 = workflow() %>%
+  add_recipe(logreg_recipe3) %>% 
+  add_model(logreg_model3)
+
+logreg_fit3 = fit(logreg_wf3,train)
+```
+
+```{r}
+tidy(logreg_fit3)
+glance(logreg_fit3)
+
+logreg3_output = tidy(logreg_fit3)
+logreg3_output = logreg3_output %>% select(term, estimate, p.value)
+logreg3_output
+```
+
+Now that we have a model that we "like", let's look at threshold development.
+
+Start by developing predictions (predicted probabilities) for the training set.
+
+```{r}
+predicttrain = predict(logreg_fit3, train, type="prob") #Make predictions on train set first
+head(predicttrain)
+```
+
+```{r}
+predicttrain = predicttrain[2]
+head(predicttrain)
+```
+
+Before we build our ROC curve, let's use trial and error to see how the threshold affects accuracy. Let's start with a threshold of 0.5. What is the accuracy from this confusion matrix?
+
+```{r}
+t1 = table(train$TenYearCHD, predicttrain > 0.5) #creates confusion matrix
+t1
+(t1[1,1]+t1[2,2])/nrow(train) #refers to elements in the table object, (t1[1,1] is upper left corner, t1[2,2] is lower left corner)
+```
+
+Repeat and test with other threshold values.
+
+```{r}
+t1 = table(train$TenYearCHD, predicttrain > 0.4) 
+(t1[1,1]+t1[2,2])/nrow(train) #refer to elements in the table object
+t1
+
+t1 = table(train$TenYearCHD, predicttrain > 0.6) 
+(t1[1,1]+t1[2,2])/nrow(train) #refer to elements in the table object
+t1
+```
+
+Question: Do more people in the dataset end up with heart disease or not? What if we classified everyone by this majority? How accurate would we be?
+
+```{r}
+table(train$TenYearCHD)
+```
+
+```{r}
+2375/nrow(train)
+```
+
+Now let's look at the ROC curve. Recall that the ROC curve helps us to find a threshold value that balances sensitivity and specificity.
+
+```{r}
+#Change this next line to the names of your predictions and the response variable in the training data frame
+ROCRpred = prediction(predicttrain, train$TenYearCHD) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+Find the "optimal" threshold to balance sensitivity and specificity.
+
+```{r}
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+See performance on the training set.
+
+```{r}
+t1 = table(train$TenYearCHD, predicttrain > 0.1681687) 
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+
+What about finding the best threshold for accuracy?
+
+```{r}
+acc.perf = performance(ROCRpred, measure = "acc")
+plot(acc.perf)
+```
+
+```{r}
+ind = which.max( slot(acc.perf, "y.values")[[1]] )
+acc = slot(acc.perf, "y.values")[[1]][ind]
+cutoff = slot(acc.perf, "x.values")[[1]][ind]
+print(c(accuracy= acc, cutoff = cutoff))
+```
+
+And on the testing set (remember to develop predictions on the testing set first)
+
+```{r}
+predicttest = predict(logreg_fit3, test, type="prob")[2]
+t2 = table(test$TenYearCHD, predicttest > 0.5436991)
+t2
+
+#Accuracy
+
+
+
+(t2[1,1]+t2[2,2])/(nrow(test))
+```

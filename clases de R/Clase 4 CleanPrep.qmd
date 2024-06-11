@@ -1,0 +1,124 @@
+---
+format:
+  html:
+    self-contained: true
+---
+
+### Clean and Preparation Demonstration
+
+#### Package Installation
+
+```{r}
+#| include: false
+#install.packages("tidyverse") 
+#install.packages("VIM")
+#install.packages("gridExtra") 
+library(tidyverse) #"activates" the tidyverse package
+library(VIM) #used to visualize missingness in data
+library(gridExtra) #arranging plots in grids
+library(patchwork) #an alternative for plot arranging
+library(mice) #for imputing missing values
+library(titanic)
+```
+
+#### Importing Data
+
+Import the Titanic dataset. The data is attached to a package. This is text file where data entries are separated by commas.
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+#### Examining the Data
+
+Structure and summary of the dataset.
+
+```{r}
+str(titanic)
+summary(titanic)
+```
+
+Things to notice:\
+**1.** Notice how missing data is displayed in the summary. Be careful because people do NOT always record missing values in the same manner!! How do we deal with missing data?
+
+**2.** Categorical variables have not been automatically converted to factors. We can manually convert them.
+
+#### Cleaning the Data
+
+Variable Clean-up. Here we use the following functions:
+
+-   select: To remove (delete) unneeded columns
+
+-   as_factor: Convert categorical variables to "factors"
+
+-   fct_recode: Rename factor "levels"
+
+```{r}
+titanic = titanic %>% select(-PassengerId, -Name, -Fare, -Cabin, -Ticket, -Embarked) 
+
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+str(titanic)
+```
+
+Missingness (there are MANY ways to visualize missing data in a dataset, here's one way). Here we use "aggr" function from the VIM package.
+
+```{r}
+vim_plot = aggr(titanic, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+Delete rows with missing data. We use the function "drop_na" (this is a Tidyverse function) for this purpose.
+
+```{r}
+#impute age
+set.seed(12345)
+imp_age = mice(titanic, m=5, method='pmm', printFlag=FALSE) #imputes age
+summary(imp_age)
+```
+
+Fill in missing values with combined imputed values
+
+```{r}
+titanic_complete = complete(imp_age) 
+summary(titanic_complete)
+```
+
+#### Visualization
+
+Look at visuals of each variable versus the response variable "survived".
+
+```{r}
+ggplot(titanic, aes(x=Pclass, fill = Survived)) + geom_bar()
+ggplot(titanic, aes(x=Sex, fill = Survived)) + geom_bar()
+ggplot(titanic, aes(x=Survived, y = Age)) + geom_boxplot()
+ggplot(titanic, aes(x=SibSp, fill=Survived)) + geom_bar()
+ggplot(titanic, aes(x=Parch, fill=Survived)) + geom_bar()
+```
+
+#### Arranging Plots in a Grid
+
+You may find it desirable (to save space in your document) to arrange plots in a grid.
+
+```{r}
+p1 = ggplot(titanic, aes(x=Pclass, fill = Survived)) + geom_bar()
+p2 = ggplot(titanic, aes(x=Sex, fill = Survived)) + geom_bar()
+p3 = ggplot(titanic, aes(x=Survived, y = Age)) + geom_boxplot()
+p4 = ggplot(titanic, aes(x=SibSp, fill=Survived)) + geom_bar()
+p5 = ggplot(titanic, aes(x=Parch, fill=Survived)) + geom_bar()
+grid.arrange(p1,p2,p3,p4,p5, ncol = 2)
+```
+
+An alternative using the patchwork package.
+
+```{r}
+(p1 | p2) / (p3 | p4) / p5 
+```
+
+#### Rendering/Knitting
+
+Convert your Quarto work into an HTML or Word file by clicking Render and selecting HTML or Word. Rendering can take awhile! When rendering, R is re-running all of your code. If you have code that takes a long time to execute, it will take a long time to render!
+
+#### Exporting Files from RStudio Cloud
+
+To save a file from your RStudio Cloud project to your local computer (for example, in order to submit work for homework or exams), start by going to the Files pane (lower right of RStudio). Click the box next to the file you want to export. Click the gear icon next to "More" in the File pane area and then click "Export". You will then be able to save the file to your computer.

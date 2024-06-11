@@ -1,0 +1,321 @@
+---
+format:
+  html:
+    self-contained: true
+---
+
+**Exam 1 Take Home Portion**
+
+```{r}
+#| include: false
+# you may or may not need all of these libraries, but they are loaded just in case
+library(tidyverse) 
+library(tidymodels)
+library(esquisse)
+library(GGally)
+library(caret)
+library(VIM)
+library(glmnet)
+library(ranger)
+library(randomForest)
+library(rpart)
+library(rattle)
+library(RColorBrewer)
+library(skimr)
+library(VIM)
+library(ROCR) #new package
+library(rpart) #trees
+library(rpart.plot) #for plotting trees
+```
+
+**INSTRUCTIONS**
+
+-   This exam is an individual exam.
+-   This exam is "open-book, open-note, open-Google".
+-   Do not consult with other students.
+-   Submit your work on Canvas as a **rendered HTML file**.
+-   Late submissions will NOT be accepted without prior approval.
+-   Be sure that your answers are easy to identify.
+-   You may use the "esquisse" package for developing plots (if desired)
+
+Run the lines of code below to read in a dataset containing historical Major League Baseball team performance data.
+
+```{r}
+url = "https://www.dropbox.com/s/9j96ztla5r3bpuy/Teams.csv?raw=1"
+teams = read_csv(url)
+```
+
+Answer the following questions using appropriate R code.
+
+**Question 1**
+
+*a)* How many rows and columns are in the this dataset?
+
+```{r}
+ncol(teams)
+nrow(teams)
+```
+
+48 columns and 2835 rows
+
+*b)* Identify one variable that is categorical.
+
+```{r}
+str(teams)
+```
+
+SHO is a categorical variable
+
+*c)* Is there missing data? How do you know? If there is missing data, select one variable with missing data and discuss how you might handle the missingness (you do not need to actually write any code).
+
+Yes, there is missing data. I found it by quickly checking the data in the dataframe. In the case of divID I would delete the entire variable because looks like there is too much missing data in this column.
+
+**Question 2**
+
+*a)* Create a new data frame that includes data from the year 1980 to the most recent year in the dataset. **You'll use this dataset for the remainder the questions regarding baseball**.
+
+```{r}
+teams2 = teams %>% filter(yearID >= 1980)
+```
+
+
+*b)* How many rows are in your new data frame?
+
+```{r}
+nrow(teams2)
+```
+It has 1048 rows
+
+*c)* Create a new variable called "RD" (for run differential) that is equal to R-RA. This variable will hold the difference in the number of runs scored by and against each team.
+
+```{r}
+teams2 = teams2 %>% mutate(RD = R-RA) 
+```
+
+
+*d)* Create a new variable called "Wpct" that is equal to 100\*W/(W+L).
+
+Observation: the set of characters of \* were change by * because Wpct is suppose to be a %
+
+```{r}
+teams2 = teams2 %>% mutate(Wpct = 100*W/(W+L)) 
+```
+
+
+*e)* What are the minimum and maximum values for Wpct in the new data frame?
+
+```{r}
+max(teams2$Wpct)
+min(teams2$Wpct)
+```
+
+The maximun value is 71.60494 and the minimun is 26.54321
+
+**Question 3**
+
+Develop an appropriate plot to examine the relationship between run differential (RD) and win percentage (Wpct). Which variable should be used to predict the other? Does this plot support your intution regarding the relationship between these two variables?
+
+```{r}
+teams2 %>% ggplot(aes(x=RD, y=Wpct)) + 
+    geom_point()
+```
+
+
+Run differential should be used to predict win percentage. Yes, the plot supports my intuition because the less run differential on team has, the less win percentage it has.
+
+**Question 4**
+
+Use the non-Tidymodels syntax to build a linear regression model to predict "Wpct" with "RD". Comment on the quality of the resulting model. Include a brief examination of residuals in your commentary on model quality.
+
+```{r}
+model1 <- lm(Wpct ~ RD, data = teams2)
+model1
+
+res <- residuals(model1)
+plot(fitted(model1), res, xlab = "Fitted values", ylab = "Residuals")
+hist(res, breaks = 50, xlab = "Residuals", ylab = "Frequency")
+```
+
+The quality of the model is quite good, as we can see in the histogram the graph has a normal distribution. It can certanly be better, but it is a model which we can work with.
+
+**Question 5**
+
+Repeat Question 4 using the Tidymodels syntax.
+
+```{r}
+ames_recipe = recipe(Wpct ~ RD, data = teams2) %>%
+  step_dummy(all_nominal()) #ensures that the model treats categorical variables properly
+
+lm_model = 
+  linear_reg() %>% #model type for linear regression
+  set_engine("lm") #engine for typical linear regression model
+
+#link the model and recipe together into a workflow
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(ames_recipe)
+
+lm_fit = fit(lm_wflow, teams2)
+
+lm_fit
+glance(lm_fit)
+```
+
+
+Before proceeding to the next questions, read-in the "churn.csv" file into a dataframe called "churn".
+
+```{r}
+churn <- read.csv("churn.csv")
+str(churn)
+```
+
+
+Convert all of the character variables to factors as these are categorical.
+
+```{r}
+churn = churn %>% mutate(Partner = as_factor(Partner)) %>%
+  mutate(gender = as_factor(gender)) %>% 
+  mutate(Dependents = as_factor(Dependents)) %>% 
+  mutate(PhoneService = as_factor(PhoneService)) %>% 
+  mutate(MultipleLines = as_factor(MultipleLines)) %>% 
+  mutate(InternetService = as_factor(InternetService)) %>% 
+  mutate(OneMoreService = as_factor(OneMoreService))  %>% 
+  mutate(PaperlessBilling = as_factor(PaperlessBilling)) %>% 
+  mutate(PaymentMethod = as_factor(PaymentMethod)) %>% 
+  mutate(Churn = as_factor(Churn)) %>%
+  mutate(Contract = as_factor(Contract))
+str(churn)
+```
+No 1
+Yes 2
+
+**Question 6**
+
+Split the datset into training and testing sets. Put 70% of the data in the training set. Stratify the split by the response variable "Churn". Use a random number seed of 1234.
+
+```{r}
+set.seed(1234)
+churn_split = initial_split(churn, prop = 0.7, strata = Churn)
+train = training(churn_split)
+test = testing(churn_split)
+```
+
+
+How many rows are in the training and testing datasets after you build the split?
+
+```{r}
+nrow(train)
+nrow(test)
+```
+The training set has 4929 rows and the test has 2114
+
+**Question 7**
+
+Examine the "Churn" variable in the training dataset. This is our response variable and indicates if a customer left the company or not. What happens to the majority of customers in this dataset? What would our accuracy be if we assumed that what happened to the majority happened to everyone? Recall, that we call this quantity the "naive accuracy".
+
+```{r}
+yes = filter(train, Churn == "Yes")
+no = filter(train, Churn == "No")
+nrow(yes)/nrow(train)
+nrow(no)/nrow(train)
+```
+The majority of customers left the company. If we assumed that everyone leaves the company, we would have an accuracy of 73.46%
+
+**Question 8**
+
+Build a logistic regression model with "MonthlyCharges" to predict "Churn". Comment on this model.
+```{r}
+logreg_model = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe = recipe(Churn ~ MonthlyCharges , data = train) 
+
+logreg_wf = workflow() %>%
+  add_recipe(logreg_recipe) %>% 
+  add_model(logreg_model)
+
+logreg_fit = fit(logreg_wf,train)
+
+options(scipen = 999)
+tidy(logreg_fit)
+glance(logreg_fit)
+
+predictions = predict(logreg_fit, train, type="prob") #develop predicted probabilities
+head(predictions) #shows the first six rows of predictions
+```
+
+According to the model the bigger the Monthly Charges then there is more probability for the customer to left the company. The p-value is significant so we could say that this is a good model.
+
+**Question 9**
+
+Build a logistic regression model with "MonthlyCharges" and the "OneMoreService" variable (this variable indicates if customers are paying for any add-on services.
+
+```{r}
+logreg_model2 = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe2 = recipe(Churn ~ MonthlyCharges + OneMoreService, data = train) 
+
+logreg_wf2 = workflow() %>%
+  add_recipe(logreg_recipe2) %>% 
+  add_model(logreg_model2)
+
+logreg_fit2 = fit(logreg_wf2,train)
+```
+
+```{r}
+options(scipen = 999)
+tidy(logreg_fit2)
+glance(logreg_fit2)
+```
+
+One More Service is not a good variable to include into the model. Its p-value is pretty bad and the overall AIC is bigger than the first one. This means that the first model is better than this second one.
+
+
+**Question 10**
+
+Build a classification tree on the training set using all of the variables.
+
+```{r}
+tree_recipe = recipe(Churn ~ MonthlyCharges + OneMoreService + gender + Partner + Dependents + tenure + PhoneService + MultipleLines + InternetService + OneMoreService + Contract + PaperlessBilling + PaymentMethod + MonthlyCharges, train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+tree_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(tree_recipe)
+
+tree_fit = fit(tree_wflow, train)
+```
+
+```{r}
+#look at the tree's fit
+tree_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  
+```
+
+```{r}
+#rpart.plot(tree)
+```
+
+
+**Question 11**
+
+What is the accuracy of this tree on the training and testing sets?
+
+```{r}
+#first develop predictions on the training set
+treepred = predict(tree_fit, train, type = "class")
+confusionMatrix(treepred$.pred_class, train$Churn,positive = "Yes")
+```
+
+The accuracy of the decision tree is 78.68%.
+
+**End of Exam**

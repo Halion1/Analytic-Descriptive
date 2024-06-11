@@ -1,0 +1,152 @@
+### NCAA Tournament Prediction
+
+Objective: Estimate probability a team wins if matched-up with any other team in the 2022 Men's NCAA Basketball tournament. Work was done as part of a Kaggle competition. The competition is described here: https://www.kaggle.com/competitions/mens-march-mania-2022/data. I finished in 134th place out of 930 submissions. :)
+
+#### Libraries
+
+Load the necessary libraries.
+
+```{r}
+#| include: false
+library(tidyverse)  
+library(tidymodels)
+library(usemodels)
+library(glmnet)
+library(ROCR)
+```
+
+#### Read-In Data
+
+```{r}
+results = read_csv("cleaned.csv")
+results = results %>% select(-...1) #getting rid of residual row number column
+```
+
+```{r}
+str(results)
+summary(results)
+```
+
+Convert response to a factor (we're doing logistic regression)
+
+```{r}
+results = results %>% mutate(Team_A_Win = as_factor(Team_A_Win))
+str(results)
+```
+
+#### Lasso Regression
+
+Set-up folds (can be used for other model types also) for k-fold cross-validation.
+
+```{r}
+set.seed(5144)
+folds = vfold_cv(results, v=5) #using 5 folds, 3, 5, or 10 is typical
+```
+
+Here's the recipe. Mixture is set to 1 for Lasso. We'll try 100 lambda values.
+
+```{r}
+glmnet_recipe <- 
+  recipe(formula = Team_A_Win ~ TORV_A + TORV_B + Seed_Diff + ADJOE_A + 
+           ADJOE_B + ADJDE_A + ADJDE_B + `EFG%_A` + `EFG%_B` + ORB_A + 
+           ORB_B + TOR_A + TOR_B + FTR_A + FTR_B, data = results) %>% 
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_predictors(), -all_nominal()) #must be scaled and center for lasso
+
+glmnet_spec <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet") 
+
+glmnet_workflow <- 
+  workflow() %>% 
+  add_recipe(glmnet_recipe) %>% 
+  add_model(glmnet_spec) 
+
+glmnet_grid = grid_regular(penalty(), levels = 100)
+
+#set up tuning of lambda
+glmnet_tune = 
+  tune_grid(glmnet_workflow, resamples = folds, 
+            grid = glmnet_grid)
+```
+
+```{r}
+glmnet_tune %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  ggplot(aes(penalty, mean)) +
+  geom_errorbar(aes(
+    ymin = mean - std_err,
+    ymax = mean + std_err
+  ),
+  alpha = 0.5
+  ) +
+  geom_line(linewidth = 1.5) +
+  theme(legend.position = "none")
+```
+
+Let's zoom in a bit.
+
+What is the exact best value?
+
+```{r}
+best_acc = glmnet_tune %>%
+  select_best("accuracy")
+best_mnlog
+```
+
+Finalize the workflow
+
+```{r}
+final_lasso = glmnet_workflow %>% finalize_workflow(best_acc)
+```
+
+Fit the finalized workflow to the data
+
+```{r}
+lasso_fit = fit(final_lasso, results)
+```
+
+Take a look at the model coefficients
+
+```{r}
+options(scipen = 999)
+lasso_fit %>%
+  extract_fit_parsnip() %>%
+  pluck("fit")  %>% 
+  coef(s = best_acc$penalty) #show the coefficients for our selected lambda value
+options(scipen = 0)
+```
+
+A Tidy view
+
+```{r}
+tidy(lasso_fit)
+```
+
+Developing predictions and thinking about thresholds.
+
+```{r}
+predictions = predict(lasso_fit, results, type="prob")[2]
+
+ROCRpred = prediction(predictions, results$Team_A_Win) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r}
+#Determine threshold to balance sensitivity and specificity
+#DO NOT modify this code
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```

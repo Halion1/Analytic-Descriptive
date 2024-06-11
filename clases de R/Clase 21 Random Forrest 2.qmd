@@ -1,0 +1,221 @@
+### Random Forest (Titanic with Parameter Tuning)
+
+```{r}
+#| include: false
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(caret)
+library(mice) 
+library(VIM)
+library(ranger)
+library(randomForest)
+library(e1071)
+library(esquisse)
+library(vip)
+```
+
+Load Titanic Data from the titanic package.
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+Typical data cleaning and preparation.
+
+```{r}
+#factor conversion and recoding
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+
+#select only variables relevant to our analysis 
+titanic = titanic %>% dplyr::select(c("Survived","Pclass","Sex","Age","SibSp","Parch"))
+
+#missing value imputation
+set.seed(123)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE) #imputes age
+titanic_complete = complete(imp_age) 
+summary(titanic_complete)
+```
+
+Training/testing split
+
+```{r}
+set.seed(123) 
+titanic_split = initial_split(titanic_complete, prop = 0.7, strata = Survived) #70% in training
+train = training(titanic_split) 
+test = testing(titanic_split)
+```
+
+Setting up our k-folds. We'll use the folds to help us with tuning our model parameters.
+
+```{r}
+set.seed(123)
+rf_folds = vfold_cv(train, v = 5)
+```
+
+Our un-tuned Random Forest (using the ranger package) from last lecture.
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model2 = rand_forest() %>% 
+  set_engine("ranger", importance = "permutation") %>% 
+  set_mode("classification")
+
+titanic_wflow2 = 
+  workflow() %>% 
+  add_model(rf_model2) %>% 
+  add_recipe(titanic_recipe)
+
+set.seed(123) #need the seed here because of the randomness of random forest models
+titanic_fit2 = fit(titanic_wflow2, train)
+```
+
+Examine model and important variables
+
+```{r}
+titanic_fit2
+
+titanic_fit2 %>% 
+  extract_fit_parsnip() %>% 
+  vip()
+```
+
+Training predictions
+
+```{r}
+predRF = predict(titanic_fit2, train)
+confusionMatrix(predRF$.pred_class, train$Survived, positive = "Yes")
+```
+
+Test predictions
+
+```{r}
+predRFtest = predict(titanic_fit2, test)
+confusionMatrix(predRFtest$.pred_class, test$Survived, positive = "Yes")
+```
+
+### Random Forest (using ranger package, with tuning)
+
+Model below takes about 2 minutes to run on RStudio Cloud.
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model3 = rand_forest(mtry = tune(), min_n = tune(), trees = 500) %>% 
+  #ranger lets us tune mtr, min_n, and trees
+  #tuning mtry and min_n parameters
+  #set trees to default of 500
+  set_engine("ranger", importance = "permutation") %>% #added importance metric
+  set_mode("classification")
+
+titanic_wflow3 = 
+  workflow() %>% 
+  add_model(rf_model3) %>% 
+  add_recipe(titanic_recipe)
+
+set.seed(123)
+rf_res3 = tune_grid(
+  titanic_wflow3,
+  resamples = rf_folds,
+  grid = 50 #try 50 different combinations of the random forest tuning parameters
+)
+```
+
+Examine model performance for combinations of parameter values
+
+```{r}
+rf_res3 %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  select(mean, min_n, mtry) %>%
+  pivot_longer(min_n:mtry,
+    values_to = "value",
+    names_to = "parameter"
+  ) %>%
+  ggplot(aes(value, mean, color = parameter)) +
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~parameter, scales = "free_x") +
+  labs(x = NULL, y = "Accuracy")
+```
+
+Identify best combination of parameters.
+
+```{r}
+best_rf = select_best(rf_res3, "accuracy")
+
+final_rf = finalize_workflow(
+  titanic_wflow3,
+  best_rf
+)
+
+final_rf
+```
+
+Fit the finalized model
+
+```{r}
+#fit the finalized workflow to our training data
+final_rf_fit = fit(final_rf, train)
+```
+
+Examine variable importance
+
+```{r}
+final_rf_fit %>% extract_fit_parsnip() %>% vip()
+```
+
+Training predictions
+
+```{r}
+trainpredrf = predict(final_rf_fit, train) 
+confusionMatrix(trainpredrf$.pred_class, train$Survived, 
+                positive = "Yes")
+```
+
+Test predictions
+
+```{r}
+testpredrf = predict(final_rf_fit, test)
+confusionMatrix(testpredrf$.pred_class, test$Survived, 
+                positive = "Yes")
+```
+
+Additional tuning. Set tuning to optimal paramters from tuning above and then work with an additional paramter (max.depth). max.depth controls how deep each individual tree in the random forest can grow. Deeper trees may result in overfitting. Unfortunately, we cannot tune max.depth directly with Tidymodels. Reasonable values for max.depth may range from 3 to 10. You will need to experiment. Setting max.depth will reduce accuracy on training set, but also reduce likelihood of overfitting.
+
+```{r}
+titanic_recipe = recipe(Survived ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model4 = rand_forest(mtry = 3, min_n = 7, trees = 500) %>% 
+  #Use "optimal" mtry and min_n values
+  set_engine("ranger", importance = "permutation", max.depth = 3) %>% 
+  #add max.depth parameter
+  set_mode("classification")
+
+titanic_wflow4 = 
+  workflow() %>% 
+  add_model(rf_model4) %>% 
+  add_recipe(titanic_recipe)
+
+set.seed(123) #need the seed here because of the randomness of random forest models
+titanic_fit4 = fit(titanic_wflow4, train)
+```
+
+Evaluate performance on training set
+
+```{r}
+trainpredrf = predict(titanic_fit4, train) 
+confusionMatrix(trainpredrf$.pred_class, train$Survived, 
+                positive = "Yes")
+```
+
+```{r}
+testpredrf = predict(titanic_fit4, test)
+confusionMatrix(testpredrf$.pred_class, test$Survived, 
+                positive = "Yes")
+```

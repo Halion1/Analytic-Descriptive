@@ -1,0 +1,107 @@
+
+
+ggplot(graph, aes(x=continent, y=gdpPercap)) + geom_boxplot() + theme_bw()
+
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+title: "Diamonds Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(plotly)
+```
+
+# Cover Page {.sidebar}
+
+This is a sidebar page. We can put text or other info here.  
+Total page width is 1000.
+
+# Visuals
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+```{r}
+diamonds = ggplot2::diamonds
+```
+
+### Distribution of Carat
+
+```{r}
+ggplot(diamonds,aes(x=carat)) + geom_histogram()
+```
+
+
+### Carat and Price
+
+```{r}
+ggplot(diamonds,aes(x=carat,y=price)) + geom_point(alpha = 0.1)
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Count of Diamonds by Cut
+
+```{r}
+#interactive plot
+p = ggplot(diamonds,aes(x=cut)) + geom_bar()
+ggplotly(p)
+```
+
+### Count of Diamonds by Clarity
+
+```{r}
+ggplot(diamonds,aes(x=clarity)) + geom_bar()
+```
+
+# Another Page
+
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+
+```
+
+### Chart C
+
+```{r}
+
+```
+### Evolution of Gdp per Population
+```{r}
+  ggplot(peru, aes(x=pop, y=gdpPercap)) +
+    geom_line( color="grey") +
+    geom_point(shape=21, color="black", fill="#69b3a2", size=2) +
+    ggtitle("Evolution of Gdp per Population")
+```
+

@@ -1,0 +1,126 @@
+## More Trees (Heart Dataset)
+
+```{r}
+#| include = false
+library(tidyverse) 
+library(tidymodels)
+library(caret)
+library(titanic)
+library(rpart) #trees
+library(rpart.plot) #for plotting trees
+library(rattle) #trees
+library(RColorBrewer) #trees
+library(e1071)
+library(VIM) #missing data
+library(mice) #missing data
+library(esquisse)
+```
+
+### Data Ingest and Preparation
+
+```{r}
+heart = read_csv("framingham.csv")
+
+#factor conversions
+heart = heart %>% mutate(male = as_factor(male)) %>%
+  mutate(education = as_factor(education)) %>%
+  mutate(currentSmoker = as_factor(currentSmoker)) %>%
+  mutate(BPMeds = as_factor(BPMeds)) %>%
+  mutate(prevalentStroke = as_factor(prevalentStroke)) %>%
+  mutate(prevalentHyp = as_factor(prevalentHyp)) %>%
+  mutate(diabetes = as_factor(diabetes)) %>%
+  mutate(TenYearCHD = as_factor(TenYearCHD))
+
+#recode variables
+heart = heart %>% mutate(male = fct_recode(male, "Yes" = "1","No"="0")) %>% 
+  mutate(currentSmoker = fct_recode(currentSmoker, "YesSmokes"="1","NoSmokes"="0")) %>%
+  mutate(BPMeds = fct_recode(BPMeds, "YesBPMeds"="1","NoBPMeds"="0")) %>%
+  mutate(prevalentStroke = fct_recode(prevalentStroke, "YesStroke"="1","NoStroke"="0")) %>%
+  mutate(prevalentHyp = fct_recode(prevalentHyp, "YesHyp"="1","NoHyp"="0")) %>%
+  mutate(diabetes = fct_recode(diabetes, "YesDiabetes"="1","NoDiabetes"="0")) %>%
+  mutate(TenYearCHD = fct_recode(TenYearCHD, "YesTenYearCHD"="1","NoTenYearCHD"="0")) %>%
+  mutate(education = fct_recode(education, "Some HS"="1","HS"="2","Some College"="3","College or More"="4"))
+
+heart = heart %>% dplyr::select(-glucose) %>% drop_na()
+
+str(heart)
+```
+
+### Split
+
+Standard splitting code for a 70/30 training/testing split.
+
+```{r}
+set.seed(123) 
+heart_split = initial_split(heart, prop = 0.7, strata = TenYearCHD) #70% in training
+train = training(heart_split) 
+test = testing(heart_split)
+```
+
+### Visualization
+
+Skipping data visualization for the sake of time. We did this last time we worked with this dataset.
+
+### Building Model
+
+Recall that our default goal is to build a tree that gives maximum accuracy without overfitting the training data. Such a tree should have good performance on the testing set. Let's start with a tree that uses stroke data and age.
+
+```{r}
+heart_recipe = recipe(TenYearCHD ~ prevalentStroke + age, train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+heart_wflow = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(heart_recipe)
+
+heart_fit = fit(heart_wflow, train)
+```
+
+```{r}
+#extract the tree's fit from the fit object
+tree = heart_fit %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+#plot the tree
+fancyRpartPlot(tree) 
+```
+
+This is different. We are presented with an error. However, this error is OK! It's means that no tree was created! We were left with only a root (no splits). In other words, the best "tree" is simply the naive model.
+
+If this happens, **be sure to comment out the fancyRpartPlot line** as the file will not render with this error.
+
+### Building Another Model
+
+Let's build a second model. This time let's use all of the potential predictor variables.
+
+```{r}
+heart_recipe2 = recipe(TenYearCHD ~. , train)
+
+tree_model = decision_tree() %>% 
+  set_engine("rpart", model = TRUE) %>% #don't forget the model = TRUE flag
+  set_mode("classification")
+
+heart_wflow2 = 
+  workflow() %>% 
+  add_model(tree_model) %>% 
+  add_recipe(heart_recipe2)
+
+heart_fit2 = fit(heart_wflow2, train)
+```
+
+```{r}
+#extract the tree's fit from the fit object
+tree2 = heart_fit2 %>% 
+  pull_workflow_fit() %>% 
+  pluck("fit")
+
+#plot the tree
+fancyRpartPlot(tree2) 
+```
+
+Same issue as before. Even when we use all of the variables as predictors, the best tree is no tree at all. This can be a pretty common occurrence when we have an imbalanced response variable (i.e., one of the response variable classes is much larger than the other).

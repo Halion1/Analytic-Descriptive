@@ -1,0 +1,59 @@
+---
+title: "Diamonds Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(plotly)
+```
+
+# Cover Page {.sidebar}
+
+This is a sidebar page. We can put text or other info here.  
+Total page width is 1000.
+
+# Visuals
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+```{r}
+diamonds = ggplot2::diamonds
+```
+
+### Distribution of Carat
+
+```{r}
+ggplot(diamonds,aes(x=carat)) + geom_histogram()
+```
+
+
+### Carat and Price
+
+```{r}
+ggplot(diamonds,aes(x=carat,y=price)) + geom_point(alpha = 0.1)
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Count of Diamonds by Cut
+
+```{r}
+#interactive plot
+p = ggplot(diamonds,aes(x=cut)) + geom_bar()
+ggplotly(p)
+```
+
+### Count of Diamonds by Clarity
+
+```{r}
+ggplot(diamonds,aes(x=clarity)) + geom_bar()
+```
+
+# Another Page

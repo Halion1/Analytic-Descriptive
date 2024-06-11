@@ -1,0 +1,186 @@
+---
+title: "DataViz"
+format: html
+self-contained: true
+---
+
+#### Data Visualization
+
+```{r}
+library(tidyverse)
+library(esquisse)
+library(lubridate)
+library(RColorBrewer)
+```
+
+Let's load our dataset.
+
+```{r}
+bike = read_csv("dc_bike.csv")
+```
+
+```{r}
+str(bike)
+summary(bike)
+```
+
+Let's do a bit of variable type conversion before we proceed.
+
+```{r}
+bike = bike %>% mutate_if(is.character, as_factor)
+```
+
+Examine structure
+
+```{r}
+str(bike)
+```
+
+Also convert the hour variable to a factor and the date variable to a date object.
+
+```{r}
+bike = bike %>% mutate(hr = as_factor(hr)) %>% 
+  mutate(dteday = mdy(dteday))
+```
+
+Double-check structure
+
+```{r}
+str(bike)
+```
+
+Now we're ready build some data visualizations.
+
+Let's base our visualizations around a series of questions that we want to potentially answer.
+
+How does the total number of rides change by hour of the day?
+
+```{r}
+ggplot(bike,aes(x=hr,y=count)) + geom_boxplot() + theme_bw()
+```
+
+What about by month?
+
+```{r}
+ggplot(bike,aes(x=mnth,y=count)) + geom_boxplot() + theme_bw()
+```
+
+By day of week
+
+```{r}
+ggplot(bike,aes(x=weekday,y=count)) + geom_boxplot() + theme_bw()
+```
+
+Some faceting.
+
+```{r}
+ggplot(bike,aes(x=hr,y=count)) + geom_boxplot() + theme_bw() + facet_wrap(~workingday,ncol =1)
+```
+
+Has the bike share program grown over time? Plot sum of daily rides over time.
+
+```{r}
+bike %>% group_by(dteday) %>% summarise(sum = sum(count)) %>%
+ggplot(aes(x=dteday,y=sum)) + geom_line() + theme_bw()
+```
+
+```{r}
+bike %>% group_by(dteday) %>% summarise(sum = sum(count)) %>%
+ggplot(aes(x=dteday,y=sum)) + geom_line() + geom_smooth(method = "lm", se = FALSE) + theme_bw()
+```
+
+Is there a relationship between temperature and ride count?
+
+```{r}
+ggplot(bike,aes(x=temp,y=count)) + geom_point() + theme_bw()
+```
+
+Use alpha to alleviate overplotting.
+
+```{r}
+ggplot(bike,aes(x=temp,y=count)) + geom_point(alpha=0.05) + theme_bw()
+```
+
+Add some color
+
+```{r}
+ggplot(bike,aes(x=temp,y=count,color=workingday)) + geom_point(alpha=0.1) + theme_bw()
+```
+
+Not sure that this works well, let's facet.
+
+```{r}
+ggplot(bike,aes(x=temp,y=count,color=workingday)) + geom_point(alpha=0.1) + 
+  facet_wrap(~workingday) + theme_bw()
+```
+
+Keep playing with this a bit.
+
+```{r}
+ggplot(bike,aes(x=temp,y=count,color=workingday)) + geom_point(alpha=0.1) + 
+  facet_wrap(~weathersit) + theme_bw()
+```
+
+Manually adjusting colors
+
+```{r}
+ggplot(bike,aes(x=temp,y=count,color=workingday)) + geom_point(alpha=0.1) + 
+  facet_wrap(~workingday) + theme_bw() +
+  scale_color_manual(values=c("gray","blue"))
+```
+
+Let's look at a histogram of temp and see how we can adjust colors of fills.
+
+```{r}
+ggplot(bike,aes(x=temp)) + geom_histogram() + theme_bw()
+```
+
+Let's look at just three months out of the year: Jan, Mar, and Jul. Use a filter to isolate those.
+
+```{r}
+bike %>% filter(mnth == "Jan" | mnth == "Mar" | mnth == "Jul") %>%
+ggplot(aes(x=temp,fill=mnth)) + geom_histogram() + theme_bw()
+```
+
+Adjust the histograms so that they overlap and have some transparency.
+
+```{r}
+bike %>% filter(mnth == "Jan" | mnth == "Mar" | mnth == "Jul") %>%
+ggplot(aes(x=temp,fill=mnth)) + 
+  geom_histogram(position = "identity", alpha = 0.4) + theme_bw()
+```
+
+Adjust the colors manually.
+
+```{r}
+bike %>% filter(mnth == "Jan" | mnth == "Mar" | mnth == "Jul") %>%
+ggplot(aes(x=temp,fill=mnth)) + 
+  geom_histogram(position = "identity", alpha = 0.4) + theme_bw() + 
+  scale_fill_manual(values=c("blue","green","red"))
+```
+
+We can also apply palettes. See here for discussion: <http://www.sthda.com/english/wiki/ggplot2-colors-how-to-change-colors-automatically-and-manually#use-rcolorbrewer-palettes>
+
+```{r}
+bike %>% filter(mnth == "Jan" | mnth == "Mar" | mnth == "Jul") %>%
+ggplot(aes(x=temp,fill=mnth)) + 
+  geom_histogram(position = "identity", alpha = 0.4) + theme_bw() + 
+  scale_fill_brewer(palette="Set2")
+```
+
+Finally, let's add some labels.
+
+```{r}
+bike %>% filter(mnth == "Jan" | mnth == "Mar" | mnth == "Jul") %>%
+ggplot(aes(x=temp,fill=mnth)) + 
+  geom_histogram(position = "identity", alpha = 0.4) + theme_bw() + 
+  scale_fill_brewer(palette="Set2") +
+  xlab("Temperature") + ylab("Count") + ggtitle("Rides by Month by Temperature") +
+  labs(fill="Month") 
+```
+
+Save the plot to file
+
+```{r}
+ggsave("plot.jpg",width=6,height=4)
+```

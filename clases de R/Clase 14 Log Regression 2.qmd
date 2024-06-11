@@ -1,0 +1,198 @@
+## Logistic Regression (Continued)
+
+Libraries
+
+```{r}
+#| include: false
+#install.packages(c("titanic","tidyverse","caret","mice","VIM","MASS"))
+library(titanic)
+library(tidyverse)
+library(tidymodels)
+library(mice)
+library(VIM)
+library(ROCR) #new package
+```
+
+Load Titanic Data from the titanic package.
+
+```{r}
+titanic = titanic::titanic_train
+```
+
+Structure and summary
+
+```{r}
+str(titanic)
+summary(titanic)
+```
+
+Remove a few variables that we do not plan to use in our models. Perform factor conversion because several of our variables are categorical and should be converted to factors.
+
+```{r}
+titanic = titanic %>% dplyr::select(-PassengerId, -Name, -Fare, -Cabin, -Ticket, -Embarked) 
+
+titanic = titanic %>% mutate(Survived = as_factor(Survived)) %>% 
+  mutate(Survived = fct_recode(Survived, "No" = "0", "Yes" = "1" )) %>%
+  mutate(Pclass = as_factor(Pclass)) %>% mutate(Sex = as_factor(Sex)) 
+str(titanic)
+```
+
+View missingness in the dataset.
+
+```{r}
+vim_plot = aggr(titanic, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+```
+
+Impute the age variable. NOTE: Normally we would do this after the training and testing split. We'll discuss later.
+
+```{r}
+#impute age
+set.seed(12345)
+imp_age = mice(titanic, m=1, method='pmm', printFlag=FALSE) #imputes age
+summary(imp_age)
+```
+
+Fill in the missing values with the imputed values.
+
+```{r}
+titanic_complete = complete(imp_age) 
+summary(titanic_complete)
+```
+
+Training/testing split. 70% of the data goes to the training set.
+
+```{r}
+set.seed(1234)
+titanic_split = initial_split(titanic_complete, prop = 0.7, strata = Survived)
+train = training(titanic_split)
+test = testing(titanic_split)
+```
+
+## Modeling
+
+Let's build a model with Pclass only. Note the format and the use of the glm function.
+
+```{r}
+logreg_model = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe = recipe(Survived ~ Pclass , data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf = workflow() %>%
+  add_recipe(logreg_recipe) %>% 
+  add_model(logreg_model)
+
+logreg_fit = fit(logreg_wf,train)
+```
+
+Examine the model
+
+```{r}
+tidy(logreg_fit)
+glance(logreg_fit)
+```
+
+Let's pause here for a moment to discuss what this model actually means.
+
+How would we write out the equation for this model? How does the model differ from a linear regression model? What are the implications of the "slope" coefficients?
+
+Let's add gender.
+
+```{r}
+logreg_model2 = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe2 = recipe(Survived ~ Pclass + Sex, data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf2 = workflow() %>%
+  add_recipe(logreg_recipe2) %>% 
+  add_model(logreg_model2)
+
+logreg_fit2 = fit(logreg_wf2,train)
+```
+
+```{r}
+options(scipen = 999)
+tidy(logreg_fit2)
+glance(logreg_fit2)
+```
+
+Let's add age.
+
+```{r}
+logreg_model3 = #give the model type a name 
+  logistic_reg() %>% #specify that we are doing logistic regression
+  set_engine("glm") #specify the specify type of linear tool we want to use 
+
+logreg_recipe3 = recipe(Survived ~ Pclass + Sex + Age, data = train) %>%
+               step_dummy(all_nominal(), -all_outcomes())
+
+logreg_wf3 = workflow() %>%
+  add_recipe(logreg_recipe3) %>% 
+  add_model(logreg_model3)
+
+logreg_fit3 = fit(logreg_wf3,train)
+```
+
+```{r}
+tidy(logreg_fit3)
+glance(logreg_fit3)
+```
+
+Next we'll look at making predictions and evaluating model quality.
+
+Let's predict a survival probability.
+
+```{r}
+newdata = data.frame(Sex = "male", Pclass = "3", Age = 24)
+predict(logreg_fit3, newdata, type="prob")
+```
+
+```{r}
+newdata = data.frame(Sex = "female", Pclass = "1", Age = 10)
+predict(logreg_fit3, newdata, type="prob")
+```
+
+```{r}
+newdata = data.frame(Sex = "female", Pclass = "1", Age = 21)
+predict(logreg_fit3, newdata, type="prob")
+```
+
+We can now estimate the probabilities that a Titanic passenger survives. This is useful, but what if we want to actually classify a passenger as a survivor or someone that did not survive?
+
+To do this we need to identify a probability threshold. The threshold is used as a "cutoff" to between survivors and non-survivors. We can choose this threshold by trial-and-error or we can use more technical approaches.
+
+Start this process by developing predictions for all passengers.
+
+```{r}
+predictions = predict(logreg_fit3, train, type="prob") #develop predicted probabilities
+head(predictions) #shows the first six rows of predictions
+```
+
+We only need the "Yes" predictions (survived) so let's extract those. Note the syntax.
+
+```{r}
+predictions = predict(logreg_fit3, train, type="prob")[2]
+head(predictions)
+```
+
+We can now develop an ROC plot.
+
+```{r}
+#Change this next line to the names of your predictions and the response variable in the training data frame
+ROCRpred = prediction(predictions, train$Survived) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+OK. Now what? What are the numbers on the colored line? What is the "True positive Rate" (TPR) and "False positive rate" (FPR) stuff?
+
+True positive rate = Sensitivity
+
+False positive rate = 1 - Specificity
